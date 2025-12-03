@@ -341,13 +341,22 @@ export default function App() {
 
   // --- Actions ---
   const handleGoogleLogin = async () => {
-      if (!auth) return;
+      if (!auth) {
+        alert("Lỗi: Firebase chưa được khởi tạo. Vui lòng kiểm tra biến môi trường trên Vercel.");
+        return;
+      }
       const provider = new GoogleAuthProvider();
       try {
           await signInWithPopup(auth, provider);
-      } catch (error) {
+      } catch (error: any) {
           console.error("Google login failed", error);
-          alert("Login failed. Check console for details.");
+          if (error.code === 'auth/unauthorized-domain') {
+              alert(`LỖI TÊN MIỀN (Domain Error):\n\nTên miền trang web này chưa được cấp phép trên Firebase.\n\nCách sửa: Vào Firebase Console -> Authentication -> Settings -> Authorized Domains -> Thêm tên miền của trang web vào (ví dụ: doanh-journey.vercel.app).`);
+          } else if (error.code === 'auth/popup-closed-by-user') {
+              // User closed popup, do nothing
+          } else {
+              alert(`Đăng nhập thất bại: ${error.message}`);
+          }
       }
   };
 
