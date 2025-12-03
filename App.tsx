@@ -8,7 +8,8 @@ import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/fire
 import { 
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
-  Clock, Play, Pause, RotateCcw, Gift
+  Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
+  Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus
 } from 'lucide-react';
 
 // --- Firebase Configuration & Safety Checks ---
@@ -148,6 +149,19 @@ const defaultLog: DailyLog = {
   studyMinutes: 0,
 };
 
+// --- Link Button Component ---
+const ResourceLink = ({ href, label, colorClass = "bg-gray-100 text-gray-700 hover:bg-gray-200", icon = <ExternalLink size={12}/> }: { href: string, label: string, colorClass?: string, icon?: React.ReactNode }) => (
+    <a 
+        href={href} 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${colorClass}`}
+    >
+        {icon}
+        {label}
+    </a>
+);
+
 // --- Confetti Component ---
 const Confetti = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -210,6 +224,7 @@ const Confetti = () => {
 // --- Main Component ---
 export default function App() {
   const [user, setUser] = useState<any>(null);
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(formatDate(new Date()));
   const [logs, setLogs] = useState<LogsMap>({});
@@ -498,8 +513,62 @@ export default function App() {
     setTimeout(() => setShowChoiceMsg(false), 5000);
   };
 
+  // --- Slider Logic ---
+  const currentMinutes = activeLog.studyMinutes || 0;
+  const sliderMax = 90;
+  
+  const getSliderColor = (val: number) => {
+    if (val < 10) return '#facc15'; // Yellow
+    if (val < 30) return '#22c55e'; // Green
+    if (val < 60) return '#3b82f6'; // Blue
+    return '#9333ea'; // Purple
+  };
+  
+  const sliderColor = getSliderColor(currentMinutes);
+  const sliderPercentage = Math.min((currentMinutes / sliderMax) * 100, 100);
+
+  const sliderMilestones = [
+      { val: 10, icon: Footprints, color: 'text-yellow-500' },
+      { val: 20, icon: Zap, color: 'text-lime-500' },
+      { val: 30, icon: Bike, color: 'text-green-500' },
+      { val: 40, icon: Car, color: 'text-teal-500' },
+      { val: 50, icon: Bus, color: 'text-cyan-500' },
+      { val: 60, icon: TrainFront, color: 'text-sky-500' },
+      { val: 70, icon: Plane, color: 'text-blue-500' },
+      { val: 80, icon: Rocket, color: 'text-indigo-500' },
+      { val: 90, icon: Gem, color: 'text-purple-500' }
+  ];
+
+  // --- APP SCREEN ---
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800 pb-20">
+      {/* Dynamic Style for Slider Thumb & Track */}
+      <style>{`
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: ${sliderColor};
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            border: 3px solid white;
+            transition: background 0.2s;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 10px;
+            cursor: pointer;
+            background: #e5e7eb;
+            border-radius: 9999px;
+            /* Gradient fill logic */
+            background-image: linear-gradient(to right, #facc15 0%, #22c55e 33%, #3b82f6 66%, #9333ea 100%);
+            background-size: ${sliderPercentage}% 100%;
+            background-repeat: no-repeat;
+        }
+      `}</style>
+
       {showConfetti && <Confetti />}
       
       {/* Toast Messages */}
@@ -719,8 +788,17 @@ export default function App() {
                    {expandedSection === 1 ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                 </button>
                 {expandedSection === 1 && (
-                    <div className="px-4 pb-3 text-sm text-gray-600 leading-relaxed animate-in slide-in-from-top-2">
-                        Fill in Meaning, Vocabulary, and Memorization Method/Example (min 2 words) for 2 words.
+                    <div className="px-4 pb-3 space-y-3 animate-in slide-in-from-top-2">
+                        <div className="text-sm text-gray-600 leading-relaxed">
+                            Fill in Meaning, Vocabulary, and Memorization Method.
+                            <br/>
+                            <span className="font-semibold text-blue-700">Example:</span> Xe đạp - bike - Tôi <span className="italic">ride my bike</span> đến trường.
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1 border-t border-blue-100">
+                             <ResourceLink href="https://4englishapp.com/#/reading" label="4English" />
+                             <ResourceLink href="https://thestoryshack.com/flash-fiction/" label="Stories" />
+                             <ResourceLink href="https://www.vocabulary.com/lists/52473" label="Vocab List" />
+                        </div>
                     </div>
                 )}
               </div>
@@ -789,8 +867,16 @@ export default function App() {
                    {expandedSection === 2 ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                 </button>
                 {expandedSection === 2 && (
-                    <div className="px-4 pb-3 text-sm text-gray-600 leading-relaxed">
-                        Stuck? Ask AI for recent TOEIC or IELTS speaking topics. Try to speak continuously!
+                    <div className="px-4 pb-3 space-y-3">
+                        <div className="text-sm text-gray-600 leading-relaxed">
+                            Stuck? Use the tools below to find topics or practice reading.
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1 border-t border-purple-100">
+                             <ResourceLink href="https://readalong.google.com/" label="Google Read Along" colorClass="bg-purple-100 text-purple-700 hover:bg-purple-200" />
+                             <ResourceLink href="https://www.conversationstarters.com/generator.php" label="Topic Generator" colorClass="bg-purple-100 text-purple-700 hover:bg-purple-200" />
+                             <ResourceLink href="https://esldiscussions.com/" label="ESL Discussions" colorClass="bg-purple-100 text-purple-700 hover:bg-purple-200" />
+                             <ResourceLink href="https://reedsy.com/creative-writing-prompts/" label="Reedsy Prompts" colorClass="bg-purple-100 text-purple-700 hover:bg-purple-200" />
+                        </div>
                     </div>
                 )}
               </div>
@@ -835,14 +921,39 @@ export default function App() {
                    {expandedSection === 3 ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                 </button>
                 {expandedSection === 3 && (
-                    <div className="px-4 pb-3 text-sm text-gray-600 leading-relaxed">
-                        Listen to a TED Talk, podcast, or news. You MUST paste the link below to complete this task.
+                    <div className="px-4 pb-3 space-y-3">
+                        <div className="text-sm text-gray-600 leading-relaxed">
+                            Choose a level below. Listen and paste the YouTube link to complete.
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-orange-100">
+                             <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Pronunciation</span>
+                                <div className="flex flex-wrap gap-1">
+                                    <ResourceLink href="https://www.youtube.com/@Pronunciationwithemma/videos" label="Emma" colorClass="bg-orange-100 text-orange-800" icon={<Youtube size={12}/>} />
+                                    <ResourceLink href="https://www.youtube.com/@rachelsenglish/videos" label="Rachel" colorClass="bg-orange-100 text-orange-800" icon={<Youtube size={12}/>} />
+                                </div>
+                             </div>
+                             <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Basic & Conversation</span>
+                                <div className="flex flex-wrap gap-1">
+                                    <ResourceLink href="https://listenaminute.com/" label="Listen A Minute" colorClass="bg-orange-100 text-orange-800" />
+                                    <ResourceLink href="https://www.youtube.com/@EnglishEasyPractice/videos" label="Easy Practice" colorClass="bg-orange-100 text-orange-800" icon={<Youtube size={12}/>} />
+                                </div>
+                             </div>
+                             <div className="space-y-1 sm:col-span-2">
+                                <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Advanced (Business/News)</span>
+                                <div className="flex flex-wrap gap-1">
+                                    <ResourceLink href="https://www.youtube.com/@BusinessInsider/videos" label="Business Insider" colorClass="bg-orange-100 text-orange-800" icon={<Youtube size={12}/>} />
+                                    <ResourceLink href="https://www.youtube.com/@CNBCMakeIt/videos" label="CNBC Make It" colorClass="bg-orange-100 text-orange-800" icon={<Youtube size={12}/>} />
+                                </div>
+                             </div>
+                        </div>
                     </div>
                 )}
               </div>
 
               <div className="grid grid-cols-1 gap-3">
-                  <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Topic (e.g. TED Talk on Space)" value={activeLog.listeningTopic} onChange={(e) => handleUpdateLog('listeningTopic', e.target.value)} />
+                  <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Topic (e.g. News on Space)" value={activeLog.listeningTopic} onChange={(e) => handleUpdateLog('listeningTopic', e.target.value)} />
                   
                   <div className="relative">
                         <LinkIcon className="absolute left-3 top-3.5 text-gray-400" size={16} />
@@ -881,12 +992,35 @@ export default function App() {
               
                <div className="bg-pink-50/50 rounded-lg border border-pink-100 overflow-hidden">
                 <button onClick={() => setExpandedSection(expandedSection === 4 ? null : 4)} className="w-full px-4 py-2 flex items-center justify-between text-sm text-pink-600 font-medium hover:bg-pink-50 transition">
-                   <span className="flex items-center gap-2"><Info size={16}/> Requirement</span>
+                   <span className="flex items-center gap-2"><Info size={16}/> Resources & Prompts</span>
                    {expandedSection === 4 ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                 </button>
                 {expandedSection === 4 && (
-                    <div className="px-4 pb-3 text-sm text-gray-600 leading-relaxed">
-                        Write at least 30 words about what you learned today, a short story, or summarize a grammar point.
+                    <div className="px-4 pb-3 space-y-3">
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                             <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-pink-400 uppercase tracking-wider">Grammar</span>
+                                <div className="flex flex-wrap gap-1">
+                                    <ResourceLink href="https://www.youtube.com/@POCEnglish/videos" label="POC English" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" icon={<Youtube size={12}/>} />
+                                    <ResourceLink href="https://www.youtube.com/@StudyEnglishwithUs/streams" label="Study With Us" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" icon={<Youtube size={12}/>} />
+                                </div>
+                             </div>
+                             <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-pink-400 uppercase tracking-wider">Writing Ideas</span>
+                                <div className="flex flex-wrap gap-1">
+                                    <ResourceLink href="https://www.textfixer.com/tools/random-word-generator.php" label="Random Word Gen" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" />
+                                </div>
+                             </div>
+                             <div className="space-y-1 sm:col-span-2">
+                                <span className="text-[10px] font-bold text-pink-400 uppercase tracking-wider">Read & Summarize</span>
+                                <div className="flex flex-wrap gap-1">
+                                    <ResourceLink href="https://breakingnewsenglish.com/" label="Breaking News" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" />
+                                    <ResourceLink href="https://learnenglish.britishcouncil.org/skills/reading" label="British Council" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" />
+                                    <ResourceLink href="https://www.eslfast.com/" label="ESL Fast" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" />
+                                    <ResourceLink href="https://www.newsinlevels.com/" label="News In Levels" colorClass="bg-pink-100 text-pink-700 hover:bg-pink-200" />
+                                </div>
+                             </div>
+                        </div>
                     </div>
                 )}
               </div>
@@ -934,25 +1068,33 @@ export default function App() {
              <div className="bg-gray-50 p-6 border-b border-gray-100">
                 <h4 className="text-gray-700 font-bold mb-1 text-center">Every minute you commit counts—be aware of it.</h4>
                 <p className="text-gray-500 text-sm mb-6 text-center italic">Hãy ghi nhận những nỗ lực bạn đã thực hiện ngày hôm nay!</p>
-                <div className="px-4">
-                    <input 
-                        type="range" 
-                        min="0" 
-                        max="120" 
-                        step="5"
-                        disabled={isLocked}
-                        value={activeLog.studyMinutes || 0}
-                        onChange={(e) => handleUpdateLog('studyMinutes', parseInt(e.target.value))}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                    />
-                    <div className="flex justify-between text-xs text-gray-400 mt-2 font-medium">
-                        <span>0m</span>
-                        <span>30m</span>
-                        <span>60m</span>
-                        <span>90m</span>
-                        <span>120m</span>
+                <div className="px-2 pt-4 pb-2">
+                    <div className="relative mb-6">
+                        <input
+                            type="range"
+                            min="0"
+                            max="90"
+                            step="5"
+                            disabled={isLocked}
+                            value={activeLog.studyMinutes || 0}
+                            onChange={(e) => handleUpdateLog('studyMinutes', parseInt(e.target.value))}
+                            className="w-full h-3 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        />
                     </div>
-                    <div className="text-center mt-3 font-bold text-blue-600 text-lg">
+                    
+                    <div className="flex justify-between items-end relative px-1">
+                        {sliderMilestones.map((m) => {
+                            const isActive = (activeLog.studyMinutes || 0) >= m.val;
+                            return (
+                                <div key={m.val} className={`flex flex-col items-center gap-1 transition-all duration-500 ${isActive ? m.color : 'text-gray-300 grayscale'}`}>
+                                    <m.icon size={20} fill={isActive ? "currentColor" : "none"} />
+                                    <span className="text-[10px] font-bold">{m.val}m</span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                    
+                    <div className="text-center mt-5 font-bold text-2xl transition-colors duration-300" style={{ color: sliderColor }}>
                         {activeLog.studyMinutes || 0} minutes
                     </div>
                 </div>
