@@ -426,6 +426,13 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, [activeTask]);
 
+  // Auto-complete task after 15 minutes (900 seconds)
+  useEffect(() => {
+    if (activeTask && taskTimer >= 900) {
+       toggleTaskTimer(activeTask);
+    }
+  }, [taskTimer, activeTask]);
+
   // Auth
   useEffect(() => {
     if (!auth) return;
@@ -668,6 +675,10 @@ export default function App() {
       }
   };
 
+  const resetTaskTimer = () => {
+    setTaskTimer(0);
+  };
+
   const triggerCelebration = (currentMoney: number) => {
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 3000);
@@ -845,23 +856,34 @@ export default function App() {
                  )}
              </div>
              
-             <button
-                 disabled={isLocked || (activeTask && !isActive)}
-                 onClick={() => toggleTaskTimer(task)}
-                 className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all shadow-sm 
-                     ${isActive 
-                         ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' 
-                         : `${colorClass} text-white hover:opacity-90`
-                     }
-                     ${(activeTask && !isActive) ? 'opacity-50 cursor-not-allowed' : ''}
-                 `}
-             >
-                 {isActive ? (
-                     <><Square size={16} fill="currentColor" /> Complete</>
-                 ) : (
-                     <><Play size={16} fill="currentColor" /> Start Practice</>
+             <div className="flex items-center gap-2">
+                 {isActive && (
+                     <button
+                         onClick={resetTaskTimer}
+                         className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition"
+                         title="Reset Timer"
+                     >
+                         <RotateCcw size={20} />
+                     </button>
                  )}
-             </button>
+                 <button
+                     disabled={isLocked || (activeTask && !isActive)}
+                     onClick={() => toggleTaskTimer(task)}
+                     className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all shadow-sm 
+                         ${isActive 
+                             ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' 
+                             : `${colorClass} text-white hover:opacity-90`
+                         }
+                         ${(activeTask && !isActive) ? 'opacity-50 cursor-not-allowed' : ''}
+                     `}
+                 >
+                     {isActive ? (
+                         <><Square size={16} fill="currentColor" /> Complete</>
+                     ) : (
+                         <><Play size={16} fill="currentColor" /> Start Practice</>
+                     )}
+                 </button>
+             </div>
           </div>
       );
   };
@@ -1322,9 +1344,20 @@ export default function App() {
               <div className="grid grid-cols-1 gap-3">
                   <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Topic (e.g. News on Space)" value={activeLog.listeningTopic} onChange={(e) => handleUpdateLog('listeningTopic', e.target.value)} />
                   
-                  <div className="relative">
-                        <LinkIcon className="absolute left-3 top-3.5 text-gray-400" size={16} />
-                        <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Paste YouTube Link Here (Required)" value={activeLog.listeningLink} onChange={(e) => handleUpdateLog('listeningLink', e.target.value)} />
+                  <div className="relative flex gap-2">
+                        <div className="relative flex-1">
+                            <LinkIcon className="absolute left-3 top-3.5 text-gray-400" size={16} />
+                            <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Paste YouTube Link Here (Required)" value={activeLog.listeningLink} onChange={(e) => handleUpdateLog('listeningLink', e.target.value)} />
+                        </div>
+                        {activeLog.listeningLink && (
+                            <button 
+                                onClick={() => window.open(activeLog.listeningLink, '_blank')}
+                                className="px-3 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition flex items-center justify-center"
+                                title="Open Link"
+                            >
+                                <ExternalLink size={20} />
+                            </button>
+                        )}
                   </div>
                   
                   <div className="flex flex-col md:flex-row gap-4">
