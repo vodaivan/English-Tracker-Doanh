@@ -4,14 +4,17 @@ import { initializeApp } from 'firebase/app';
 // @ts-ignore
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 // @ts-ignore
-import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
   Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon,
-  Timer, Square, RefreshCw
+  Timer, Square, RefreshCw, Shield, X
 } from 'lucide-react';
+
+// --- CONSTANTS ---
+const ADMIN_EMAIL = 'vodaivan00@gmail.com';
 
 // --- Firebase Configuration & Safety Checks ---
 const getFirebaseConfig = () => {
@@ -110,6 +113,16 @@ interface DailyLog {
 
 interface LogsMap {
   [dateString: string]: DailyLog;
+}
+
+interface StudentSummary {
+    uid: string;
+    displayName: string;
+    email: string;
+    photoURL: string;
+    lastActive: string;
+    currentMonthScore: number;
+    totalStudyMinutes: number;
 }
 
 // --- Helper Functions ---
@@ -241,9 +254,96 @@ const Confetti = () => {
   return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-50" />;
 };
 
+// --- Admin Dashboard Component ---
+const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
+    const [students, setStudents] = useState<StudentSummary[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!db) return;
+        const q = collection(db, 'artifacts', appId, 'student_summaries');
+        // Simple listener for all summaries
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const list: StudentSummary[] = [];
+            snapshot.forEach(doc => list.push(doc.data() as StudentSummary));
+            // Sort by last active descending
+            list.sort((a, b) => (a.lastActive < b.lastActive ? 1 : -1));
+            setStudents(list);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900">
+                        <Shield size={24} className="text-indigo-600" />
+                        Admin Dashboard
+                    </h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-auto p-4">
+                    {loading ? (
+                        <div className="flex justify-center items-center h-full text-gray-400">Loading data...</div>
+                    ) : students.length === 0 ? (
+                        <div className="text-center text-gray-500 mt-10">No students found yet.</div>
+                    ) : (
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                                <tr>
+                                    <th className="p-3">Student</th>
+                                    <th className="p-3">Current Month Score</th>
+                                    <th className="p-3">Total Study Time</th>
+                                    <th className="p-3 text-right">Last Active</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {students.map((s) => (
+                                    <tr key={s.uid} className="hover:bg-gray-50 transition">
+                                        <td className="p-3">
+                                            <div className="flex items-center gap-3">
+                                                {s.photoURL ? (
+                                                    <img src={s.photoURL} alt="" className="w-8 h-8 rounded-full bg-gray-200" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                                                        {s.displayName?.[0] || 'U'}
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <div className="font-medium text-gray-900">{s.displayName || 'Anonymous'}</div>
+                                                    <div className="text-xs text-gray-400">{s.email || 'No email'}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-3">
+                                            <span className="font-bold text-green-600">{s.currentMonthScore || 0}k</span>
+                                        </td>
+                                        <td className="p-3 font-mono">
+                                            {formatDuration(s.totalStudyMinutes * 60 || 0)}
+                                        </td>
+                                        <td className="p-3 text-right text-gray-500 text-xs">
+                                            {new Date(s.lastActive).toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- Main Component ---
 export default function App() {
   const [user, setUser] = useState<any>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
   
   // Initialize date with logical date (considering 2AM cutoff)
   const [currentDate, setCurrentDate] = useState(getLogicalDate());
@@ -501,8 +601,36 @@ export default function App() {
     if (user && db) {
         try {
             await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDateStr), updatedLog);
+
+            // 4. Update Student Summary for Admin Dashboard
+            // Calculate totals from newLogs state
+            let monthScore = 0;
+            let totalMins = 0;
+            const currentMonthPrefix = todayStr.substring(0, 7); // "YYYY-MM"
+
+            Object.entries(newLogs).forEach(([date, log]) => {
+                // Sum money for current month
+                if (date.startsWith(currentMonthPrefix)) {
+                    monthScore += (log.totalMoney || 0);
+                }
+                // Sum study minutes for ALL time (or restrict if needed, here all time)
+                if (log.studyMinutes) totalMins += log.studyMinutes;
+            });
+
+            const summaryData: StudentSummary = {
+                uid: user.uid,
+                email: user.email || '',
+                displayName: user.displayName || 'Anonymous User',
+                photoURL: user.photoURL || '',
+                lastActive: new Date().toISOString(),
+                currentMonthScore: monthScore,
+                totalStudyMinutes: totalMins
+            };
+            
+            await setDoc(doc(db, 'artifacts', appId, 'student_summaries', user.uid), summaryData);
+
         } catch (e) {
-            console.error("Error saving log to cloud:", e);
+            console.error("Error saving log/summary to cloud:", e);
         }
     }
   };
@@ -778,6 +906,9 @@ export default function App() {
         </div>
       )}
 
+      {/* Admin Dashboard Overlay */}
+      {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -793,6 +924,12 @@ export default function App() {
              {/* Auth Section */}
              {user && !user.isAnonymous ? (
                  <div className="flex items-center gap-2 pr-2 border-r border-gray-200">
+                     {user.email === ADMIN_EMAIL && (
+                        <button onClick={() => setShowAdmin(true)} className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-full transition" title="Admin Dashboard">
+                            <Shield size={18} />
+                        </button>
+                     )}
+                     
                      {user.photoURL ? (
                          <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-gray-200" />
                      ) : (
@@ -800,7 +937,7 @@ export default function App() {
                              <UserIcon size={16} />
                          </div>
                      )}
-                     <button onClick={handleLogout} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full transition">
+                     <button onClick={handleLogout} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full transition" title="Logout">
                          <LogOut size={18} />
                      </button>
                  </div>
