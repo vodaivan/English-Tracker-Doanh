@@ -351,7 +351,8 @@ export default function App() {
       } catch (error: any) {
           console.error("Google login failed", error);
           if (error.code === 'auth/unauthorized-domain') {
-              alert(`LỖI TÊN MIỀN (Domain Error):\n\nTên miền trang web này chưa được cấp phép trên Firebase.\n\nCách sửa: Vào Firebase Console -> Authentication -> Settings -> Authorized Domains -> Thêm tên miền của trang web vào (ví dụ: doanh-journey.vercel.app).`);
+              const currentDomain = window.location.hostname;
+              alert(`LỖI TÊN MIỀN (Domain Error):\n\nTên miền "${currentDomain}" chưa được cho phép trên Firebase.\n\nCÁCH SỬA:\n1. Vào Firebase Console (console.firebase.google.com)\n2. Chọn Authentication -> Settings -> Authorized domains\n3. Bấm "Add domain" và nhập: ${currentDomain}`);
           } else if (error.code === 'auth/popup-closed-by-user') {
               // User closed popup, do nothing
           } else {
