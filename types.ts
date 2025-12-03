@@ -14,6 +14,7 @@ export interface DailyLog {
   speakingVocab: string;
   speakingDone: boolean;
   speakingTimestamp?: string;
+  speakingDuration?: number; // Seconds
 
   // Task 3: Listening
   listeningTopic: string;
@@ -21,11 +22,13 @@ export interface DailyLog {
   listeningVocab: string;
   listeningDone: boolean;
   listeningTimestamp?: string;
+  listeningDuration?: number; // Seconds
 
   // Task 4: Writing
   writingContent: string;
   writingDone: boolean;
   writingTimestamp?: string;
+  writingDuration?: number; // Seconds
 
   // Meta
   totalMoney: number;

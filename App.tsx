@@ -9,7 +9,8 @@ import {
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
-  Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon
+  Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon,
+  Timer, Square
 } from 'lucide-react';
 
 // --- Firebase Configuration & Safety Checks ---
@@ -86,6 +87,7 @@ interface DailyLog {
   speakingVocab: string;
   speakingDone: boolean;
   speakingTimestamp?: string;
+  speakingDuration?: number;
 
   // Task 3: Listening
   listeningTopic: string;
@@ -93,11 +95,13 @@ interface DailyLog {
   listeningVocab: string;
   listeningDone: boolean;
   listeningTimestamp?: string;
+  listeningDuration?: number;
 
   // Task 4: Writing
   writingContent: string;
   writingDone: boolean;
   writingTimestamp?: string;
+  writingDuration?: number;
 
   // Meta
   totalMoney: number;
@@ -113,6 +117,16 @@ const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1
 const getFirstDayOfMonth = (year: number, month: number) => {
   const day = new Date(year, month, 1).getDay();
   return day === 0 ? 6 : day - 1; 
+};
+
+// Custom Date Logic: Day ends at 02:00 AM the next day
+const getLogicalDate = (): Date => {
+  const now = new Date();
+  // If current hour is 0 (12 AM) or 1 (1 AM), subtract 24 hours to consider it "yesterday"
+  if (now.getHours() < 2) {
+    now.setHours(now.getHours() - 24);
+  }
+  return now;
 };
 
 const formatDate = (date: Date): string => {
@@ -133,6 +147,12 @@ const formatDuration = (seconds: number): string => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+const formatMiniDuration = (seconds: number): string => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+};
+
 const countWords = (str: string): number => {
   if (!str) return 0;
   return str.trim().split(/\s+/).filter(w => w.length > 0).length;
@@ -142,9 +162,9 @@ const defaultLog: DailyLog = {
   vocab1Meaning: '', vocab1Word: '', vocab1Method: '',
   vocab2Meaning: '', vocab2Word: '', vocab2Method: '',
   vocabDone: false,
-  speakingTopic: '', speakingVocab: '', speakingDone: false,
-  listeningTopic: '', listeningLink: '', listeningVocab: '', listeningDone: false,
-  writingContent: '', writingDone: false,
+  speakingTopic: '', speakingVocab: '', speakingDone: false, speakingDuration: 0,
+  listeningTopic: '', listeningLink: '', listeningVocab: '', listeningDone: false, listeningDuration: 0,
+  writingContent: '', writingDone: false, writingDuration: 0,
   totalMoney: 0,
   studyMinutes: 0,
 };
@@ -225,8 +245,10 @@ const Confetti = () => {
 export default function App() {
   const [user, setUser] = useState<any>(null);
   
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState<string>(formatDate(new Date()));
+  // Initialize date with logical date (considering 2AM cutoff)
+  const [currentDate, setCurrentDate] = useState(getLogicalDate());
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(formatDate(getLogicalDate()));
+  
   // Initialize logs from localStorage for immediate display
   const [logs, setLogs] = useState<LogsMap>(() => {
       try {
@@ -241,9 +263,13 @@ export default function App() {
   const [congratsMsg, setCongratsMsg] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<number | null>(null);
 
-  // Stopwatch State
+  // General Stopwatch State
   const [timerRunning, setTimerRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Specific Task Timer State
+  const [activeTask, setActiveTask] = useState<'speaking' | 'listening' | 'writing' | null>(null);
+  const [taskTimer, setTaskTimer] = useState(0);
 
   // Profession State - Persisted in localStorage
   const [profession, setProfession] = useState(() => {
@@ -266,7 +292,7 @@ export default function App() {
     }
   }, [profession]);
 
-  // Timer
+  // General Timer
   useEffect(() => {
     let intervalId: number;
     if (timerRunning) {
@@ -276,6 +302,17 @@ export default function App() {
     }
     return () => clearInterval(intervalId);
   }, [timerRunning]);
+
+  // Specific Task Timer
+  useEffect(() => {
+    let intervalId: number;
+    if (activeTask) {
+        intervalId = window.setInterval(() => {
+            setTaskTimer(prev => prev + 1);
+        }, 1000);
+    }
+    return () => clearInterval(intervalId);
+  }, [activeTask]);
 
   // Auth
   useEffect(() => {
@@ -394,7 +431,9 @@ export default function App() {
   }
 
   const handleUpdateLog = async (field: keyof DailyLog, value: any) => {
-    const todayStr = formatDate(new Date());
+    // Use logical date (2AM cutoff) for comparing today
+    const todayStr = formatDate(getLogicalDate());
+    
     if (selectedDateStr < todayStr) {
       alert("This day has passed. You cannot edit past records.");
       return;
@@ -465,6 +504,30 @@ export default function App() {
     }
   };
 
+  const toggleTaskTimer = (task: 'speaking' | 'listening' | 'writing') => {
+      if (activeTask === task) {
+          // Completing the task
+          // Add elapsed time to current total
+          const field = `${task}Duration` as keyof DailyLog;
+          const currentDuration = activeLog[field] as number || 0;
+          const newDuration = currentDuration + taskTimer;
+          
+          handleUpdateLog(field, newDuration);
+          
+          // Reset
+          setActiveTask(null);
+          setTaskTimer(0);
+      } else {
+          // Starting the task
+          if (activeTask) {
+              alert("Please complete the currently running task first.");
+              return;
+          }
+          setActiveTask(task);
+          setTaskTimer(0);
+      }
+  };
+
   const triggerCelebration = (currentMoney: number) => {
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 3000);
@@ -493,7 +556,8 @@ export default function App() {
   };
 
   const isDayLocked = (dateStr: string) => {
-    return dateStr < formatDate(new Date());
+    // Use logical date (2AM cutoff) for locking
+    return dateStr < formatDate(getLogicalDate());
   };
 
   const calendarWeeks = useMemo(() => {
@@ -534,7 +598,7 @@ export default function App() {
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const log = logs[dateStr];
-        if (log) {
+        if (log && log.vocabDone) {
             // Find which week bucket
             const weekIndex = weeks.findIndex(w => day >= w.start && day <= w.end);
             if (weekIndex !== -1) {
@@ -605,6 +669,49 @@ export default function App() {
       { val: 80, icon: Rocket, color: 'text-indigo-500' },
       { val: 90, icon: Gem, color: 'text-purple-500' }
   ];
+
+  // --- Timer Controls UI Helper ---
+  const TaskTimerControls = ({ task, label, colorClass }: { task: 'speaking' | 'listening' | 'writing', label: string, colorClass: string }) => {
+      const isActive = activeTask === task;
+      const currentTaskDuration = activeLog[`${task}Duration`] || 0;
+      
+      return (
+          <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200">
+             <div className="flex items-center gap-3">
+                 <div className="flex flex-col">
+                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Timer</span>
+                     <span className={`font-mono font-bold text-lg ${isActive ? 'text-blue-600' : 'text-gray-700'}`}>
+                         {isActive ? formatDuration(taskTimer) : formatDuration(0)}
+                     </span>
+                 </div>
+                 {isActive && (
+                     <div className="flex items-center gap-1.5 animate-pulse">
+                         <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                         <span className="text-xs text-red-500 font-bold">Recording...</span>
+                     </div>
+                 )}
+             </div>
+             
+             <button
+                 disabled={isLocked || (activeTask && !isActive)}
+                 onClick={() => toggleTaskTimer(task)}
+                 className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all shadow-sm 
+                     ${isActive 
+                         ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' 
+                         : `${colorClass} text-white hover:opacity-90`
+                     }
+                     ${(activeTask && !isActive) ? 'opacity-50 cursor-not-allowed' : ''}
+                 `}
+             >
+                 {isActive ? (
+                     <><Square size={16} fill="currentColor" /> Complete</>
+                 ) : (
+                     <><Play size={16} fill="currentColor" /> Start Practice</>
+                 )}
+             </button>
+          </div>
+      );
+  };
 
   // --- APP SCREEN ---
   return (
@@ -759,10 +866,11 @@ export default function App() {
                         {week.map((day, dayIndex) => {
                             if (!day) return <div key={`empty-${dayIndex}`} className="bg-white min-h-[90px]"></div>;
                             
+                            // Use logical date for determining "isToday" visual highlight
                             const dateObj = new Date(year, month, day);
                             const dateStr = formatDate(dateObj);
                             const isSelected = selectedDateStr === dateStr;
-                            const isToday = formatDate(new Date()) === dateStr;
+                            const isToday = formatDate(getLogicalDate()) === dateStr;
                             const earned = logs[dateStr]?.totalMoney || 0;
                             const studyMins = logs[dateStr]?.studyMinutes || 0;
                             
@@ -972,6 +1080,9 @@ export default function App() {
                 )}
               </div>
 
+              {/* Timer Control */}
+              <TaskTimerControls task="speaking" label="Start Speaking" colorClass="bg-purple-500" />
+
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 space-y-2">
                     <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Topic (e.g. My Hobbies)" value={activeLog.speakingTopic} onChange={(e) => handleUpdateLog('speakingTopic', e.target.value)} />
@@ -1042,6 +1153,9 @@ export default function App() {
                     </div>
                 )}
               </div>
+
+              {/* Timer Control */}
+              <TaskTimerControls task="listening" label="Start Listening" colorClass="bg-orange-500" />
 
               <div className="grid grid-cols-1 gap-3">
                   <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Topic (e.g. News on Space)" value={activeLog.listeningTopic} onChange={(e) => handleUpdateLog('listeningTopic', e.target.value)} />
@@ -1115,6 +1229,9 @@ export default function App() {
                     </div>
                 )}
               </div>
+
+              {/* Timer Control */}
+              <TaskTimerControls task="writing" label="Start Writing" colorClass="bg-pink-500" />
 
               <div className="flex flex-col gap-2">
                 <div className="relative">
@@ -1203,6 +1320,42 @@ export default function App() {
                         <span>Perfect Month (All 4 tasks everyday): <strong>+200k</strong></span>
                     </div>
                 </div>
+             </div>
+         </section>
+
+         {/* Practice Summary */}
+         <section className="bg-white rounded-xl shadow-lg border border-teal-100 overflow-hidden">
+             <div className="bg-teal-50 p-4 border-b border-teal-100">
+                 <h3 className="font-bold text-teal-900 flex items-center gap-2">
+                     <Timer size={20} />
+                     Practice Summary
+                 </h3>
+             </div>
+             <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center">
+                     <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Speaking</span>
+                     <div className="text-lg font-bold text-purple-600">
+                         {formatMiniDuration(activeLog.speakingDuration || 0)}
+                     </div>
+                 </div>
+                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center">
+                     <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Listening</span>
+                     <div className="text-lg font-bold text-orange-600">
+                         {formatMiniDuration(activeLog.listeningDuration || 0)}
+                     </div>
+                 </div>
+                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center">
+                     <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Writing</span>
+                     <div className="text-lg font-bold text-pink-600">
+                         {formatMiniDuration(activeLog.writingDuration || 0)}
+                     </div>
+                 </div>
+                 <div className="bg-teal-100 p-3 rounded-lg border border-teal-200 text-center">
+                     <span className="text-xs text-teal-800 uppercase font-bold tracking-wider">Total Time</span>
+                     <div className="text-lg font-bold text-teal-900">
+                         {formatMiniDuration((activeLog.speakingDuration || 0) + (activeLog.listeningDuration || 0) + (activeLog.writingDuration || 0))}
+                     </div>
+                 </div>
              </div>
          </section>
 
