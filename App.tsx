@@ -374,7 +374,7 @@ export default function App() {
   // Manual refresh trigger for vocab review
   const [refreshVocabReview, setRefreshVocabReview] = useState(0);
 
-  // Profession State - Persisted in localStorage
+  // User Profile State (Persisted)
   const [profession, setProfession] = useState(() => {
     try {
       return localStorage.getItem('user_profession') || '';
@@ -382,18 +382,27 @@ export default function App() {
       return '';
     }
   });
+  const [userName, setUserName] = useState(() => {
+    try {
+      return localStorage.getItem('user_name') || '';
+    } catch {
+      return '';
+    }
+  });
+
   const [showChoiceMsg, setShowChoiceMsg] = useState(false);
 
   // --- Effects ---
   
-  // Save profession whenever it changes
+  // Save user profile whenever it changes
   useEffect(() => {
     try {
       localStorage.setItem('user_profession', profession);
+      localStorage.setItem('user_name', userName);
     } catch (e) {
       // Ignore storage errors
     }
-  }, [profession]);
+  }, [profession, userName]);
 
   // General Timer
   useEffect(() => {
@@ -1559,19 +1568,31 @@ export default function App() {
          {/* Footer Commitment */}
          <section className="bg-gray-800 text-gray-200 rounded-xl p-8 text-center space-y-6">
             <div className="space-y-4">
-                <p className="text-xl font-medium">
-                    I am Pham The Doanh. I am a 
+                <p className="text-xl font-medium flex flex-wrap justify-center items-center gap-2">
+                    <span>I am</span>
+                    <input 
+                        type="text" 
+                        value={userName} 
+                        onChange={(e) => setUserName(e.target.value)}
+                        placeholder="[ Your Name ]"
+                        className="bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-40 placeholder-gray-500"
+                    />
+                    <span>. I am a</span>
                     <input 
                         type="text" 
                         value={profession} 
                         onChange={(e) => setProfession(e.target.value)}
                         placeholder="[ expert / ... ]"
-                        className="mx-2 bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-32 placeholder-gray-500"
+                        className="bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-32 placeholder-gray-500"
                     />. 
-                    I dedicate this time for my own happiness!
+                    <span>I dedicate this time for my own happiness!</span>
                 </p>
                 <p className="text-gray-500 text-sm">
-                    Tôi là Phạm Thế Doanh, tôi là một chuyên gia 
+                    Tôi là
+                    <span className="mx-1 border-b border-gray-600 px-2 inline-block min-w-[50px] text-gray-400">
+                        {userName || "..."}
+                    </span>, 
+                    tôi là một chuyên gia 
                     <span className="mx-1 border-b border-gray-600 px-2 inline-block min-w-[50px] text-gray-400">
                         {profession || "..."}
                     </span>, 
