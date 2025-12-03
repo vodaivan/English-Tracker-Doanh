@@ -2,14 +2,14 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
 // @ts-ignore
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 // @ts-ignore
 import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
-  Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus
+  Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon
 } from 'lucide-react';
 
 // --- Firebase Configuration & Safety Checks ---
@@ -280,7 +280,7 @@ export default function App() {
           // @ts-ignore
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
-          await signInAnonymously(auth);
+            // Wait for auth state to resolve naturally
         }
       } catch (e) {
         console.error("Auth initialization error:", e);
@@ -288,7 +288,14 @@ export default function App() {
     };
     initAuth();
     
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+        if (u) {
+            setUser(u);
+        } else {
+            // Automatically sign in anonymously if no user
+            signInAnonymously(auth).catch(err => console.error("Anon auth failed", err));
+        }
+    });
     return () => unsubscribe();
   }, []);
 
@@ -333,6 +340,27 @@ export default function App() {
 
 
   // --- Actions ---
+  const handleGoogleLogin = async () => {
+      if (!auth) return;
+      const provider = new GoogleAuthProvider();
+      try {
+          await signInWithPopup(auth, provider);
+      } catch (error) {
+          console.error("Google login failed", error);
+          alert("Login failed. Check console for details.");
+      }
+  };
+
+  const handleLogout = async () => {
+      if (!auth) return;
+      try {
+          await signOut(auth);
+          // It will auto-trigger onAuthStateChanged which will sign in anonymously
+      } catch (error) {
+          console.error("Logout failed", error);
+      }
+  }
+
   const handleUpdateLog = async (field: keyof DailyLog, value: any) => {
     const todayStr = formatDate(new Date());
     if (selectedDateStr < todayStr) {
@@ -597,6 +625,27 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0">
+             {/* Auth Section */}
+             {user && !user.isAnonymous ? (
+                 <div className="flex items-center gap-2 pr-2 border-r border-gray-200">
+                     {user.photoURL ? (
+                         <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-gray-200" />
+                     ) : (
+                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                             <UserIcon size={16} />
+                         </div>
+                     )}
+                     <button onClick={handleLogout} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full transition">
+                         <LogOut size={18} />
+                     </button>
+                 </div>
+             ) : (
+                 <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-full text-xs font-medium hover:bg-gray-50 transition text-gray-700">
+                     <LogIn size={14} />
+                     Login to Sync
+                 </button>
+             )}
+
             <div className="flex flex-col items-end px-3 py-1 bg-green-50 rounded-lg border border-green-100 min-w-[100px]">
                 <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Month Total</span>
                 <span className="font-bold text-green-700">{totalEarned}k</span>
