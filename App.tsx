@@ -10,7 +10,7 @@ import {
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
   Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon,
-  Timer, Square
+  Timer, Square, RefreshCw
 } from 'lucide-react';
 
 // --- Firebase Configuration & Safety Checks ---
@@ -270,6 +270,9 @@ export default function App() {
   // Specific Task Timer State
   const [activeTask, setActiveTask] = useState<'speaking' | 'listening' | 'writing' | null>(null);
   const [taskTimer, setTaskTimer] = useState(0);
+
+  // Manual refresh trigger for vocab review
+  const [refreshVocabReview, setRefreshVocabReview] = useState(0);
 
   // Profession State - Persisted in localStorage
   const [profession, setProfession] = useState(() => {
@@ -612,7 +615,20 @@ export default function App() {
         }
     }
     return weeks;
-  }, [logs, year, month, daysInMonth]);
+  }, [logs, year, month, daysInMonth, refreshVocabReview]); // Depend on manual refresh
+
+  const handleRefreshVocab = () => {
+      // Logic: re-fetch from localstorage to ensure sync, then trigger memo update
+      try {
+          const saved = localStorage.getItem('daily_logs');
+          if (saved) {
+              setLogs(prev => ({...prev, ...JSON.parse(saved)}));
+          }
+      } catch (e) {
+          console.error("Manual sync failed", e);
+      }
+      setRefreshVocabReview(prev => prev + 1);
+  };
 
   const { totalEarned, currentScore, maxScore } = useMemo(() => {
     let total = 0;
@@ -1361,11 +1377,18 @@ export default function App() {
 
          {/* Monthly Vocab Review */}
          <section className="bg-white rounded-xl shadow-lg border border-indigo-100 overflow-hidden">
-             <div className="bg-indigo-50 p-4 border-b border-indigo-100">
+             <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex justify-between items-center">
                  <h3 className="font-bold text-indigo-900 flex items-center gap-2">
                      <BookOpen size={20} />
                      Monthly Vocabulary Review
                  </h3>
+                 <button
+                    onClick={handleRefreshVocab}
+                    className="text-xs bg-sky-100 text-sky-700 px-3 py-1.5 rounded-full hover:bg-sky-200 transition font-medium flex items-center gap-1 shadow-sm"
+                 >
+                    <RefreshCw size={12} />
+                    Update List
+                 </button>
              </div>
              <div className="p-4 space-y-2">
                  {monthlyVocabByWeek.map((week, idx) => (
