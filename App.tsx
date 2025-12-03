@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { initializeApp } from 'firebase/app'; // @ts-ignore
+// @ts-ignore
+import { initializeApp } from 'firebase/app';
+// @ts-ignore
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+// @ts-ignore
 import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
@@ -9,37 +12,61 @@ import {
 } from 'lucide-react';
 
 // --- Firebase Configuration & Safety Checks ---
-// Safely handle the global variable injection
-let firebaseConfig;
-try {
-  // @ts-ignore
-  if (typeof __firebase_config !== 'undefined') {
+const getFirebaseConfig = () => {
+  try {
+    // 1. Priority: Check for Vite/Vercel Environment Variables
     // @ts-ignore
-    firebaseConfig = JSON.parse(__firebase_config);
-  } else {
-    console.warn('__firebase_config is not defined. Using mock config for UI preview.');
-    firebaseConfig = { apiKey: "mock-key", authDomain: "mock.firebaseapp.com", projectId: "mock-project" };
+    if (import.meta && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) {
+      return {
+        // @ts-ignore
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        // @ts-ignore
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        // @ts-ignore
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        // @ts-ignore
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        // @ts-ignore
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        // @ts-ignore
+        appId: import.meta.env.VITE_FIREBASE_APP_ID
+      };
+    }
+
+    // 2. Fallback: AI Studio Global Variable
+    // @ts-ignore
+    if (typeof __firebase_config !== 'undefined') {
+      // @ts-ignore
+      return JSON.parse(__firebase_config);
+    }
+  } catch (e) {
+    console.error("Error determining firebase config", e);
   }
-} catch (e) {
-  console.error("Error parsing firebase config", e);
-  firebaseConfig = {};
-}
+  
+  return null;
+};
+
+const firebaseConfig = getFirebaseConfig();
 
 // Initialize Firebase only if we have a valid-looking config to avoid immediate crash
 let app;
 let auth;
 let db;
 
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-} catch (e) {
-  console.error("Firebase initialization failed:", e);
+if (firebaseConfig && firebaseConfig.apiKey) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (e) {
+    console.error("Firebase initialization failed:", e);
+  }
+} else {
+  console.warn('Firebase config missing. Data will not be saved to cloud.');
 }
 
 // @ts-ignore
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const appId = (typeof __app_id !== 'undefined') ? __app_id : 'default-app-id';
 
 // --- Types ---
 interface DailyLog {
