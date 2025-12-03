@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
 // @ts-ignore
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 // @ts-ignore
 import { getFirestore, collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { 
@@ -227,7 +227,15 @@ export default function App() {
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(formatDate(new Date()));
-  const [logs, setLogs] = useState<LogsMap>({});
+  // Initialize logs from localStorage for immediate display
+  const [logs, setLogs] = useState<LogsMap>(() => {
+      try {
+          const saved = localStorage.getItem('daily_logs');
+          return saved ? JSON.parse(saved) : {};
+      } catch {
+          return {};
+      }
+  });
   
   const [showConfetti, setShowConfetti] = useState(false);
   const [congratsMsg, setCongratsMsg] = useState<string | null>(null);
@@ -275,12 +283,13 @@ export default function App() {
 
     const initAuth = async () => {
       try {
+        // Set persistence to LOCAL to remember login across refresh/close
+        await setPersistence(auth, browserLocalPersistence);
+
         // @ts-ignore
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           // @ts-ignore
           await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-            // Wait for auth state to resolve naturally
         }
       } catch (e) {
         console.error("Auth initialization error:", e);
@@ -299,16 +308,28 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Real-time Database Sync
+  // Real-time Database Sync (Merge with local)
   useEffect(() => {
     if (!user || !db) return;
+    
+    // Only fetch cloud data for logged-in users or if user explicitly wants sync
+    // For now, we fetch for everyone to keep "cloud backup" working
     const q = collection(db, 'artifacts', appId, 'users', user.uid, 'daily_logs');
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newLogs: LogsMap = {};
+      const cloudLogs: LogsMap = {};
       snapshot.forEach((doc) => {
-        newLogs[doc.id] = doc.data() as DailyLog;
+        cloudLogs[doc.id] = doc.data() as DailyLog;
       });
-      setLogs(newLogs);
+      
+      // Merge: Cloud data wins if exists, otherwise keep local (for offline support)
+      setLogs(prev => {
+          const merged = { ...prev, ...cloudLogs };
+          // Also save this merged state to localStorage
+          try {
+             localStorage.setItem('daily_logs', JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+      });
     });
     return () => unsubscribe();
   }, [user]);
@@ -365,7 +386,8 @@ export default function App() {
       if (!auth) return;
       try {
           await signOut(auth);
-          // It will auto-trigger onAuthStateChanged which will sign in anonymously
+          // Reload page to clear local state and reset to anonymous clean slate
+          window.location.reload();
       } catch (error) {
           console.error("Logout failed", error);
       }
@@ -422,17 +444,24 @@ export default function App() {
       triggerCelebration(money);
     }
 
-    setLogs(prev => ({ ...prev, [selectedDateStr]: updatedLog }));
+    // 1. Update React State
+    const newLogs = { ...logs, [selectedDateStr]: updatedLog };
+    setLogs(newLogs);
 
+    // 2. Save to LocalStorage (Instant Backup)
+    try {
+        localStorage.setItem('daily_logs', JSON.stringify(newLogs));
+    } catch (e) {
+        console.warn("Local storage full or disabled", e);
+    }
+
+    // 3. Save to Firebase (Cloud Backup)
     if (user && db) {
         try {
             await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDateStr), updatedLog);
         } catch (e) {
-            console.error("Error saving log:", e);
+            console.error("Error saving log to cloud:", e);
         }
-    } else {
-        // Fallback for demo mode without user
-        console.warn("User not signed in or DB not ready. Changes local only.");
     }
   };
 
@@ -631,7 +660,10 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="bg-blue-600 text-white p-2 rounded-lg"><BookOpen size={20} /></div>
-            <h1 className="text-xl font-bold text-gray-900">English Journey</h1>
+            <div className="flex items-baseline gap-2">
+                <h1 className="text-xl font-bold text-gray-900">English Journey</h1>
+                <span className="text-xs text-gray-400 font-medium">v.25.01</span>
+            </div>
           </div>
           
           <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0">
