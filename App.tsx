@@ -10,8 +10,9 @@ import {
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
   Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon,
-  Timer, Square, RefreshCw, Shield, X, Plus, Trash2, Quote
+  Timer, Square, RefreshCw, Shield, X, Plus, Trash2, Quote, Coins, Trophy, Archive, Medal, Ban
 } from 'lucide-react';
+import { DailyLog, LogsMap, StudentSummary, QuoteItem } from './types';
 
 // --- CONSTANTS ---
 const ADMIN_EMAIL = 'vodaivan00@gmail.com';
@@ -73,63 +74,6 @@ if (firebaseConfig && firebaseConfig.apiKey) {
 // @ts-ignore
 const appId = (typeof __app_id !== 'undefined') ? __app_id : 'default-app-id';
 
-// --- Types ---
-interface DailyLog {
-  // Task 1: Vocab
-  vocab1Meaning: string;
-  vocab1Word: string;
-  vocab1Method: string;
-  vocab2Meaning: string;
-  vocab2Word: string;
-  vocab2Method: string;
-  vocabDone: boolean;
-  vocabTimestamp?: string;
-
-  // Task 2: Speaking
-  speakingTopic: string;
-  speakingVocab: string;
-  speakingDone: boolean;
-  speakingTimestamp?: string;
-  speakingDuration?: number;
-
-  // Task 3: Listening
-  listeningTopic: string;
-  listeningLink: string;
-  listeningVocab: string;
-  listeningDone: boolean;
-  listeningTimestamp?: string;
-  listeningDuration?: number;
-
-  // Task 4: Writing
-  writingContent: string;
-  writingDone: boolean;
-  writingTimestamp?: string;
-  writingDuration?: number;
-
-  // Meta
-  totalMoney: number;
-  studyMinutes: number;
-}
-
-interface LogsMap {
-  [dateString: string]: DailyLog;
-}
-
-interface StudentSummary {
-    uid: string;
-    displayName: string;
-    email: string;
-    photoURL: string;
-    lastActive: string;
-    currentMonthScore: number;
-    totalStudyMinutes: number;
-}
-
-interface QuoteItem {
-    text: string;
-    author: string;
-}
-
 // --- Helper Functions ---
 const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (year: number, month: number) => {
@@ -152,6 +96,12 @@ const formatDate = (date: Date): string => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const getYesterdayStr = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() - 1);
+    return formatDate(d);
 };
 
 const formatTime = (date: Date): string => {
@@ -185,6 +135,12 @@ const defaultLog: DailyLog = {
   writingContent: '', writingDone: false, writingDuration: 0,
   totalMoney: 0,
   studyMinutes: 0,
+  dailyCoins: 0,
+  challenge1Done: false,
+  challenge2Done: false,
+  challenge2Streak: 0,
+  challenge2Words: Array(6).fill(''),
+  challenge3Done: false
 };
 
 // --- Link Button Component ---
@@ -265,13 +221,11 @@ const DailyQuote = () => {
 
     useEffect(() => {
         if (!db) {
-            // Fallback quotes if DB not ready
             const fallbacks = [
                 { text: "The expert in anything was once a beginner.", author: "Helen Hayes" },
                 { text: "Consistency is what transforms average into excellence.", author: "Unknown" },
                 { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" }
             ];
-             // Pick based on day of year to be consistent for the day
             const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
             setQuote(fallbacks[dayOfYear % fallbacks.length]);
             return;
@@ -282,12 +236,10 @@ const DailyQuote = () => {
                 const data = docSnap.data();
                 const quotes = data.items as QuoteItem[];
                 if (quotes && quotes.length > 0) {
-                     // Pick based on day of year
                     const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
                     setQuote(quotes[dayOfYear % quotes.length]);
                 }
             } else {
-                 // Fallback if no quotes in DB
                  setQuote({ text: "Every day is a new beginning.", author: "Unknown" });
             }
         });
@@ -313,6 +265,383 @@ const DailyQuote = () => {
         </section>
     );
 }
+
+// --- Challenge Section Component ---
+const ChallengeSection = ({ 
+    log, 
+    logs, 
+    dateStr, 
+    onUpdate 
+}: { 
+    log: DailyLog, 
+    logs: LogsMap, 
+    dateStr: string, 
+    onUpdate: (updates: Partial<DailyLog>) => void 
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    // Challenge 1 State
+    const [timer1, setTimer1] = useState(120); 
+    const [isTimer1Running, setIsTimer1Running] = useState(false);
+    
+    // Challenge 2 State
+    const [chal2Inputs, setChal2Inputs] = useState<string[]>(log.challenge2Words || Array(6).fill(''));
+
+    // Challenge 3 State
+    const [timer3, setTimer3] = useState(300);
+    const [isTimer3Running, setIsTimer3Running] = useState(false);
+
+    // Timer 1 Effect
+    useEffect(() => {
+        let interval: number;
+        if (isTimer1Running && timer1 > 0) {
+            interval = window.setInterval(() => setTimer1(t => t - 1), 1000);
+        } else if (timer1 === 0) {
+            setIsTimer1Running(false);
+        }
+        return () => clearInterval(interval);
+    }, [isTimer1Running, timer1]);
+
+    // Timer 3 Effect
+    useEffect(() => {
+        let interval: number;
+        if (isTimer3Running && timer3 > 0) {
+            interval = window.setInterval(() => setTimer3(t => t - 1), 1000);
+        } else if (timer3 === 0) {
+            setIsTimer3Running(false);
+        }
+        return () => clearInterval(interval);
+    }, [isTimer3Running, timer3]);
+
+    // Helper: Reset Timer 1
+    const resetTimer1 = () => {
+        setIsTimer1Running(false);
+        setTimer1(120);
+    };
+
+    // Helper: Reset Timer 3
+    const resetTimer3 = () => {
+        setIsTimer3Running(false);
+        setTimer3(300);
+    };
+
+    const handleChal2Submit = () => {
+        if (chal2Inputs.some(w => !w.trim())) {
+            return; // Should be handled by disabled button, but safety check
+        }
+        
+        // Check yesterday's streak
+        const yesterdayStr = getYesterdayStr(dateStr);
+        const yesterdayLog = logs[yesterdayStr];
+        
+        let newStreak = 1;
+        if (yesterdayLog && yesterdayLog.challenge2Done) {
+            newStreak = (yesterdayLog.challenge2Streak || 0) + 1;
+        }
+
+        let coinsAwarded = 0;
+        let finalStreak = newStreak;
+        
+        // Reward on 3rd day
+        if (newStreak >= 3) {
+            coinsAwarded = 20; // Changed from 40 to 20
+            finalStreak = 0; // Reset cycle
+            alert("Awesome! You completed a 3-day streak. +20 Coins!");
+        } else {
+            alert(`Streak: ${newStreak} day(s). Keep going for 3 days to earn 20c!`);
+        }
+
+        onUpdate({
+            challenge2Done: true,
+            challenge2Streak: finalStreak,
+            challenge2Words: chal2Inputs,
+            dailyCoins: (log.dailyCoins || 0) + coinsAwarded
+        });
+    };
+
+    const confirmChal1 = () => {
+        onUpdate({
+            challenge1Done: true,
+            dailyCoins: (log.dailyCoins || 0) + 5
+        });
+    };
+
+    const confirmChal3 = () => {
+        onUpdate({
+            challenge3Done: true,
+            dailyCoins: (log.dailyCoins || 0) + 10
+        });
+    };
+
+    const isChal2Ready = !chal2Inputs.some(w => !w.trim());
+
+    return (
+        <div className="mt-8 border-t border-gray-200 pt-6">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white p-4 rounded-xl shadow-lg flex items-center justify-between font-bold text-lg hover:from-red-600 hover:to-orange-600 transition transform active:scale-[0.99]"
+            >
+                <div className="flex items-center gap-3">
+                    <Trophy className="text-yellow-300" />
+                    Challenge Yourself
+                </div>
+                {isOpen ? <ChevronUp /> : <ChevronDown />}
+            </button>
+
+            {isOpen && (
+                <div className="mt-4 space-y-6 animate-in slide-in-from-top-4">
+                    
+                    {/* Challenge 1 */}
+                    <div className="bg-white border border-red-100 rounded-xl p-4 shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <span className="bg-red-100 text-red-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
+                                Write 5 words on paper
+                            </h4>
+                            <span className="text-yellow-600 font-bold bg-yellow-50 px-2 py-1 rounded text-xs border border-yellow-200">+5c</span>
+                        </div>
+                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                             <div className="text-xl font-mono font-bold text-gray-700 w-20">
+                                 {Math.floor(timer1 / 60)}:{(timer1 % 60).toString().padStart(2, '0')}
+                             </div>
+                             <div className="flex gap-2">
+                                 {!log.challenge1Done ? (
+                                     <>
+                                        {timer1 > 0 && (
+                                            <>
+                                                <button 
+                                                    onClick={() => setIsTimer1Running(!isTimer1Running)}
+                                                    className={`px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition ${isTimer1Running ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-500 text-white hover:bg-red-600'}`}
+                                                >
+                                                    {isTimer1Running ? 'Pause' : 'Start Timer'}
+                                                </button>
+                                                <button 
+                                                    onClick={resetTimer1}
+                                                    className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                                                    title="Reset / Cancel"
+                                                >
+                                                    <RotateCcw size={18} />
+                                                </button>
+                                            </>
+                                        )}
+                                        {timer1 === 0 && (
+                                            <div className="flex gap-2">
+                                                <button onClick={resetTimer1} className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-300 transition">
+                                                    Cancel
+                                                </button>
+                                                <button onClick={confirmChal1} className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm font-bold animate-pulse shadow-md hover:bg-green-600 transition">
+                                                    Confirm Done
+                                                </button>
+                                            </div>
+                                        )}
+                                     </>
+                                 ) : (
+                                     <span className="text-green-600 font-bold flex items-center gap-1"><CheckCircle size={16}/> Completed</span>
+                                 )}
+                             </div>
+                        </div>
+                    </div>
+
+                    {/* Challenge 2 */}
+                    <div className="bg-white border border-red-100 rounded-xl p-4 shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <span className="bg-red-100 text-red-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
+                                6-Word Streak (3 Days)
+                            </h4>
+                            <div className="text-right">
+                                <span className="text-yellow-600 font-bold bg-yellow-50 px-2 py-1 rounded text-xs border border-yellow-200 block">+20c</span>
+                                <span className="text-[10px] text-gray-400">Streak: {log.challenge2Streak || 0}/3</span>
+                            </div>
+                        </div>
+                        {!log.challenge2Done ? (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-3 gap-2">
+                                    {chal2Inputs.map((val, i) => (
+                                        <input 
+                                            key={i} 
+                                            value={val}
+                                            onChange={(e) => {
+                                                const newInputs = [...chal2Inputs];
+                                                newInputs[i] = e.target.value;
+                                                setChal2Inputs(newInputs);
+                                            }}
+                                            className="border rounded p-2 text-sm text-center focus:ring-1 focus:ring-red-500 outline-none"
+                                            placeholder={`Word ${i+1}`}
+                                        />
+                                    ))}
+                                </div>
+                                <button 
+                                    onClick={handleChal2Submit} 
+                                    disabled={!isChal2Ready}
+                                    className={`w-full py-2 font-bold rounded-lg transition ${isChal2Ready ? 'bg-red-500 text-white hover:bg-red-600 shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                                >
+                                    Submit Streak
+                                </button>
+                            </div>
+                        ) : (
+                             <div className="text-center p-4 bg-green-50 rounded-lg border border-green-100 text-green-700 font-medium">
+                                 Streak Saved! Come back tomorrow.
+                             </div>
+                        )}
+                    </div>
+
+                     {/* Challenge 3 */}
+                     <div className="bg-white border border-red-100 rounded-xl p-4 shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <span className="bg-red-100 text-red-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                                Speak for 5 mins
+                            </h4>
+                            <span className="text-yellow-600 font-bold bg-yellow-50 px-2 py-1 rounded text-xs border border-yellow-200">+10c</span>
+                        </div>
+                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                             <div className="text-xl font-mono font-bold text-gray-700 w-20">
+                                 {Math.floor(timer3 / 60)}:{(timer3 % 60).toString().padStart(2, '0')}
+                             </div>
+                             <div className="flex gap-2">
+                                 {!log.challenge3Done ? (
+                                     <>
+                                        {timer3 > 0 && (
+                                            <>
+                                                <button 
+                                                    onClick={() => setIsTimer3Running(!isTimer3Running)}
+                                                    className={`px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition ${isTimer3Running ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-500 text-white hover:bg-red-600'}`}
+                                                >
+                                                    {isTimer3Running ? 'Pause' : 'Start Timer'}
+                                                </button>
+                                                <button 
+                                                    onClick={resetTimer3}
+                                                    className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                                                    title="Reset / Cancel"
+                                                >
+                                                    <RotateCcw size={18} />
+                                                </button>
+                                            </>
+                                        )}
+                                        {timer3 === 0 && (
+                                            <div className="flex gap-2">
+                                                <button onClick={resetTimer3} className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-300 transition">
+                                                    Cancel
+                                                </button>
+                                                <button onClick={confirmChal3} className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm font-bold animate-pulse shadow-md hover:bg-green-600 transition">
+                                                    Confirm Done
+                                                </button>
+                                            </div>
+                                        )}
+                                     </>
+                                 ) : (
+                                     <span className="text-green-600 font-bold flex items-center gap-1"><CheckCircle size={16}/> Completed</span>
+                                 )}
+                             </div>
+                        </div>
+                    </div>
+
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Personal Archive Modal ---
+const PersonalArchiveModal = ({ logs, currentDate, onClose }: { logs: LogsMap, currentDate: Date, onClose: () => void }) => {
+    // Calculate Last Month Stats
+    const prevMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    const prevYear = prevMonthDate.getFullYear();
+    const prevMonth = prevMonthDate.getMonth();
+    const prevMonthName = prevMonthDate.toLocaleString('default', { month: 'long' });
+    const prevDaysInMonth = getDaysInMonth(prevYear, prevMonth);
+    
+    let prevK = 0;
+    let prevC = 0;
+    
+    for (let d = 1; d <= prevDaysInMonth; d++) {
+        const dateStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (logs[dateStr]) {
+            prevK += (logs[dateStr].totalMoney || 0);
+            prevC += (logs[dateStr].dailyCoins || 0);
+        }
+    }
+
+    // Calculate Current Month Vocab
+    const curYear = currentDate.getFullYear();
+    const curMonth = currentDate.getMonth();
+    const curDays = getDaysInMonth(curYear, curMonth);
+    const vocabList: { word: string, meaning: string, date: string }[] = [];
+
+    for (let d = 1; d <= curDays; d++) {
+         const dateStr = `${curYear}-${String(curMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+         const log = logs[dateStr];
+         if (log && log.vocabDone) {
+             if (log.vocab1Word) vocabList.push({ word: log.vocab1Word, meaning: log.vocab1Meaning, date: dateStr });
+             if (log.vocab2Word) vocabList.push({ word: log.vocab2Word, meaning: log.vocab2Meaning, date: dateStr });
+         }
+    }
+
+    return (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+                 <div className="p-4 border-b flex justify-between items-center bg-indigo-50 rounded-t-xl">
+                     <h3 className="font-bold text-indigo-900 flex items-center gap-2">
+                         <Archive size={20} /> Personal Archive
+                     </h3>
+                     <button onClick={onClose}><X size={20} className="text-gray-500 hover:text-red-500" /></button>
+                 </div>
+                 <div className="p-6 overflow-y-auto space-y-6">
+                     {/* Previous Month Stats */}
+                     <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-4 rounded-xl border border-gray-300">
+                         <h4 className="font-bold text-gray-600 mb-3 uppercase text-xs tracking-wider flex items-center gap-2">
+                             <CalendarIcon size={14}/> {prevMonthName} {prevYear} Summary
+                         </h4>
+                         <div className="grid grid-cols-2 gap-4">
+                             <div className="bg-white p-3 rounded-lg shadow-sm text-center">
+                                 <div className="text-xs text-gray-500">Knowledge</div>
+                                 <div className="text-2xl font-bold text-green-600 flex items-center justify-center gap-1">
+                                     {prevK} <DollarSign size={20} strokeWidth={3} />
+                                 </div>
+                             </div>
+                             <div className="bg-white p-3 rounded-lg shadow-sm text-center">
+                                 <div className="text-xs text-gray-500">Coins</div>
+                                 <div className="text-2xl font-bold text-yellow-500 flex items-center justify-center gap-1">
+                                     {prevC} <Coins size={20} fill="currentColor" className="text-yellow-500" />
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+
+                     {/* Current Month Vocab */}
+                     <div>
+                         <h4 className="font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                             <BookOpen size={18} /> Vocabulary Collected ({vocabList.length})
+                         </h4>
+                         <div className="border rounded-lg overflow-hidden bg-gray-50 max-h-60 overflow-y-auto">
+                             {vocabList.length === 0 ? (
+                                 <p className="p-4 text-center text-gray-400 text-sm">No words collected this month yet.</p>
+                             ) : (
+                                 <table className="w-full text-sm text-left">
+                                     <thead className="bg-gray-100 text-gray-500 font-medium">
+                                         <tr>
+                                             <th className="p-2 pl-3">Word</th>
+                                             <th className="p-2">Meaning</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody className="divide-y divide-gray-200">
+                                         {vocabList.map((v, i) => (
+                                             <tr key={i} className="bg-white">
+                                                 <td className="p-2 pl-3 font-medium text-indigo-700">{v.word}</td>
+                                                 <td className="p-2 text-gray-600">{v.meaning}</td>
+                                             </tr>
+                                         ))}
+                                     </tbody>
+                                 </table>
+                             )}
+                         </div>
+                     </div>
+                 </div>
+             </div>
+        </div>
+    );
+};
 
 // --- Admin Dashboard Component ---
 const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
@@ -384,7 +713,7 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden relative">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <div className="flex items-center gap-4">
                         <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900">
@@ -406,8 +735,12 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                             </button>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
-                        <X size={20} />
+                    <button 
+                        onClick={onClose} 
+                        className="p-2 hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full transition z-10"
+                        title="Close Dashboard"
+                    >
+                        <X size={24} strokeWidth={3} />
                     </button>
                 </div>
                 
@@ -419,47 +752,51 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                         ) : students.length === 0 ? (
                             <div className="text-center text-gray-500 mt-10">No students found yet.</div>
                         ) : (
-                            <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                                        <tr>
-                                            <th className="p-3">Student</th>
-                                            <th className="p-3">Current Month Score</th>
-                                            <th className="p-3">Total Study Time</th>
-                                            <th className="p-3 text-right">Last Active</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {students.map((s) => (
-                                            <tr key={s.uid} className="hover:bg-gray-50 transition">
-                                                <td className="p-3">
-                                                    <div className="flex items-center gap-3">
-                                                        {s.photoURL ? (
-                                                            <img src={s.photoURL} alt="" className="w-8 h-8 rounded-full bg-gray-200" />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
-                                                                {s.displayName?.[0] || 'U'}
-                                                            </div>
-                                                        )}
-                                                        <div>
-                                                            <div className="font-medium text-gray-900">{s.displayName || 'Anonymous'}</div>
-                                                            <div className="text-xs text-gray-400">{s.email || 'No email'}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className="font-bold text-green-600">{s.currentMonthScore || 0}k</span>
-                                                </td>
-                                                <td className="p-3 font-mono">
-                                                    {formatDuration(s.totalStudyMinutes * 60 || 0)}
-                                                </td>
-                                                <td className="p-3 text-right text-gray-500 text-xs">
-                                                    {new Date(s.lastActive).toLocaleString()}
-                                                </td>
+                            <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden w-full">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm min-w-[600px]">
+                                        <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                                            <tr>
+                                                <th className="p-3">Student</th>
+                                                <th className="p-3">Current Month Score</th>
+                                                <th className="p-3">Total Study Time</th>
+                                                <th className="p-3 text-right">Last Active</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {students.map((s) => (
+                                                <tr key={s.uid} className="hover:bg-gray-50 transition">
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-3">
+                                                            {s.photoURL ? (
+                                                                <img src={s.photoURL} alt="" className="w-8 h-8 rounded-full bg-gray-200" />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                                                                    {s.displayName?.[0] || 'U'}
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <div className="font-medium text-gray-900">{s.displayName || 'Anonymous'}</div>
+                                                                <div className="text-xs text-gray-400">{s.email || 'No email'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className="font-bold text-green-600 flex items-center gap-1">
+                                                            {s.currentMonthScore || 0} <DollarSign size={14} strokeWidth={3} />
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3 font-mono">
+                                                        {formatDuration(s.totalStudyMinutes * 60 || 0)}
+                                                    </td>
+                                                    <td className="p-3 text-right text-gray-500 text-xs">
+                                                        {new Date(s.lastActive).toLocaleString()}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )
                     ) : (
@@ -476,46 +813,48 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                             </div>
                             
                             <div className="border rounded-lg overflow-hidden mb-4">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-gray-50 text-gray-500 font-medium border-b">
-                                        <tr>
-                                            <th className="p-3 text-left w-2/3">Quote Text</th>
-                                            <th className="p-3 text-left w-1/4">Author</th>
-                                            <th className="p-3 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {quotes.map((quote, idx) => (
-                                            <tr key={idx} className="group hover:bg-gray-50">
-                                                <td className="p-2">
-                                                    <textarea 
-                                                        className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-                                                        rows={2}
-                                                        value={quote.text}
-                                                        onChange={(e) => updateQuote(idx, 'text', e.target.value)}
-                                                        placeholder="Enter quote here..."
-                                                    />
-                                                </td>
-                                                <td className="p-2 align-top">
-                                                     <input 
-                                                        className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                        value={quote.author}
-                                                        onChange={(e) => updateQuote(idx, 'author', e.target.value)}
-                                                        placeholder="Author name"
-                                                    />
-                                                </td>
-                                                <td className="p-2 align-top text-center">
-                                                    <button 
-                                                        onClick={() => removeQuoteRow(idx)}
-                                                        className="p-2 text-gray-400 hover:text-red-500 transition"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </td>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm min-w-[500px]">
+                                        <thead className="bg-gray-50 text-gray-500 font-medium border-b">
+                                            <tr>
+                                                <th className="p-3 text-left w-2/3">Quote Text</th>
+                                                <th className="p-3 text-left w-1/4">Author</th>
+                                                <th className="p-3 w-10"></th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {quotes.map((quote, idx) => (
+                                                <tr key={idx} className="group hover:bg-gray-50">
+                                                    <td className="p-2">
+                                                        <textarea 
+                                                            className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                                                            rows={2}
+                                                            value={quote.text}
+                                                            onChange={(e) => updateQuote(idx, 'text', e.target.value)}
+                                                            placeholder="Enter quote here..."
+                                                        />
+                                                    </td>
+                                                    <td className="p-2 align-top">
+                                                         <input 
+                                                            className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            value={quote.author}
+                                                            onChange={(e) => updateQuote(idx, 'author', e.target.value)}
+                                                            placeholder="Author name"
+                                                        />
+                                                    </td>
+                                                    <td className="p-2 align-top text-center">
+                                                        <button 
+                                                            onClick={() => removeQuoteRow(idx)}
+                                                            className="p-2 text-gray-400 hover:text-red-500 transition"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                             
                             <button 
@@ -536,6 +875,7 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
   
   // Initialize date with logical date (considering 2AM cutoff)
   const [currentDate, setCurrentDate] = useState(getLogicalDate());
@@ -699,8 +1039,7 @@ export default function App() {
   }, [activeLog]);
 
   const isListeningReady = useMemo(() => {
-    const { listeningTopic, listeningLink, listeningVocab } = activeLog;
-    // Link is optional now
+    const { listeningTopic, listeningVocab } = activeLog;
     return listeningTopic?.trim() && listeningVocab?.trim();
   }, [activeLog]);
 
@@ -742,7 +1081,7 @@ export default function App() {
       }
   }
 
-  const handleUpdateLog = async (field: keyof DailyLog, value: any) => {
+  const handleUpdateLog = async (field: Partial<DailyLog> | keyof DailyLog, value?: any) => {
     // Use logical date (2AM cutoff) for comparing today
     const todayStr = formatDate(getLogicalDate());
     
@@ -751,48 +1090,55 @@ export default function App() {
       return;
     }
 
-    // --- Validation ---
-    if (field === 'vocabDone' && value === true && !isVocabReady) {
-        alert("Please fill in all fields. Memorization/Examples must be at least 2 words.");
-        return;
-    }
-    if (field === 'speakingDone' && value === true && !isSpeakingReady) {
-        alert("Please enter both the topic and the vocabulary learned.");
-        return;
-    }
-    if (field === 'listeningDone' && value === true && !isListeningReady) {
-        alert("Please enter the topic and the vocabulary learned.");
-        return;
-    }
-    if (field === 'writingDone' && value === true && !isWritingReady) {
-       alert(`You need at least 30 words. Current: ${countWords(activeLog.writingContent)} words.`);
-       return;
+    // --- Validation (Only if specific fields are being updated) ---
+    if (typeof field === 'string') {
+        if (field === 'vocabDone' && value === true && !isVocabReady) {
+            alert("Please fill in all fields. Memorization/Examples must be at least 2 words.");
+            return;
+        }
+        if (field === 'speakingDone' && value === true && !isSpeakingReady) {
+            alert("Please enter both the topic and the vocabulary learned.");
+            return;
+        }
+        if (field === 'listeningDone' && value === true && !isListeningReady) {
+            alert("Please enter the topic and the vocabulary learned.");
+            return;
+        }
+        if (field === 'writingDone' && value === true && !isWritingReady) {
+           alert(`You need at least 30 words. Current: ${countWords(activeLog.writingContent)} words.`);
+           return;
+        }
     }
 
     // --- Data Prep ---
     const currentLog = logs[selectedDateStr] || { ...defaultLog };
+    let updates = typeof field === 'string' ? { [field]: value } : field;
     
-    let extraUpdates = {};
+    // Add timestamps
     const nowTime = formatTime(new Date());
-    if (field === 'vocabDone' && value === true) extraUpdates = { ...extraUpdates, vocabTimestamp: nowTime };
-    if (field === 'speakingDone' && value === true) extraUpdates = { ...extraUpdates, speakingTimestamp: nowTime };
-    if (field === 'listeningDone' && value === true) extraUpdates = { ...extraUpdates, listeningTimestamp: nowTime };
-    if (field === 'writingDone' && value === true) extraUpdates = { ...extraUpdates, writingTimestamp: nowTime };
+    if (updates['vocabDone'] === true) updates['vocabTimestamp'] = nowTime;
+    if (updates['speakingDone'] === true) updates['speakingTimestamp'] = nowTime;
+    if (updates['listeningDone'] === true) updates['listeningTimestamp'] = nowTime;
+    if (updates['writingDone'] === true) updates['writingTimestamp'] = nowTime;
 
-    const updatedLog = { ...currentLog, [field]: value, ...extraUpdates };
+    const updatedLog = { ...currentLog, ...updates };
 
-    // Calculate Money
+    // Calculate Money (re-eval all tasks)
     let money = 0;
-    if (field === 'vocabDone' ? value : currentLog.vocabDone) money += 10;
-    if (field === 'speakingDone' ? value : currentLog.speakingDone) money += 10;
-    if (field === 'listeningDone' ? value : currentLog.listeningDone) money += 10;
-    if (field === 'writingDone' ? value : currentLog.writingDone) money += 10;
+    if (updatedLog.vocabDone) money += 10;
+    if (updatedLog.speakingDone) money += 10;
+    if (updatedLog.listeningDone) money += 10;
+    if (updatedLog.writingDone) money += 10;
 
     updatedLog.totalMoney = money;
 
-    const isNewTaskCompleted = updatedLog.totalMoney > (currentLog.totalMoney || 0);
-    if (isNewTaskCompleted) {
+    // Celebration check
+    if (updatedLog.totalMoney > (currentLog.totalMoney || 0)) {
       triggerCelebration(money);
+    }
+    // Check if coins increased
+    if ((updatedLog.dailyCoins || 0) > (currentLog.dailyCoins || 0)) {
+        triggerCelebration(0); // Confetti for coins
     }
 
     // 1. Update React State
@@ -812,17 +1158,14 @@ export default function App() {
             await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', selectedDateStr), updatedLog);
 
             // 4. Update Student Summary for Admin Dashboard
-            // Calculate totals from newLogs state
             let monthScore = 0;
             let totalMins = 0;
             const currentMonthPrefix = todayStr.substring(0, 7); // "YYYY-MM"
 
             Object.entries(newLogs).forEach(([date, log]) => {
-                // Sum money for current month
                 if (date.startsWith(currentMonthPrefix)) {
                     monthScore += (log.totalMoney || 0);
                 }
-                // Sum study minutes for ALL time (or restrict if needed, here all time)
                 if (log.studyMinutes) totalMins += log.studyMinutes;
             });
 
@@ -847,18 +1190,13 @@ export default function App() {
   const toggleTaskTimer = (task: 'speaking' | 'listening' | 'writing') => {
       if (activeTask === task) {
           // Completing the task
-          // Add elapsed time to current total
           const field = `${task}Duration` as keyof DailyLog;
           const currentDuration = activeLog[field] as number || 0;
           const newDuration = currentDuration + taskTimer;
-          
           handleUpdateLog(field, newDuration);
-          
-          // Reset
           setActiveTask(null);
           setTaskTimer(0);
       } else {
-          // Starting the task
           if (activeTask) {
               alert("Please complete the currently running task first.");
               return;
@@ -900,19 +1238,15 @@ export default function App() {
   };
 
   const isDayLocked = (dateStr: string) => {
-    // Use logical date (2AM cutoff) for locking
     return dateStr < formatDate(getLogicalDate());
   };
 
   const calendarWeeks = useMemo(() => {
     const weeks: (number | null)[][] = [];
     let currentWeek: (number | null)[] = [];
-    
-    // Add padding for start of month
     for (let i = 0; i < firstDayIndex; i++) {
         currentWeek.push(null);
     }
-
     for (let day = 1; day <= daysInMonth; day++) {
         currentWeek.push(day);
         if (currentWeek.length === 7) {
@@ -920,8 +1254,6 @@ export default function App() {
             currentWeek = [];
         }
     }
-
-    // Add padding for end of month
     if (currentWeek.length > 0) {
         while (currentWeek.length < 7) {
             currentWeek.push(null);
@@ -938,57 +1270,55 @@ export default function App() {
         { start: 15, end: 21, words: [] },
         { start: 22, end: daysInMonth, words: [] },
     ];
-
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const log = logs[dateStr];
         if (log && log.vocabDone) {
-            // Find which week bucket
             const weekIndex = weeks.findIndex(w => day >= w.start && day <= w.end);
             if (weekIndex !== -1) {
-                if (log.vocab1Word?.trim()) {
-                    weeks[weekIndex].words.push({ day, word: log.vocab1Word, meaning: log.vocab1Meaning });
-                }
-                if (log.vocab2Word?.trim()) {
-                    weeks[weekIndex].words.push({ day, word: log.vocab2Word, meaning: log.vocab2Meaning });
-                }
+                if (log.vocab1Word?.trim()) weeks[weekIndex].words.push({ day, word: log.vocab1Word, meaning: log.vocab1Meaning });
+                if (log.vocab2Word?.trim()) weeks[weekIndex].words.push({ day, word: log.vocab2Word, meaning: log.vocab2Meaning });
             }
         }
     }
     return weeks;
-  }, [logs, year, month, daysInMonth, refreshVocabReview]); // Depend on manual refresh
+  }, [logs, year, month, daysInMonth, refreshVocabReview]);
 
   const handleRefreshVocab = () => {
-      // Logic: re-fetch from localstorage to ensure sync, then trigger memo update
       try {
           const saved = localStorage.getItem('daily_logs');
           if (saved) {
               setLogs(prev => ({...prev, ...JSON.parse(saved)}));
           }
-      } catch (e) {
-          console.error("Manual sync failed", e);
-      }
+      } catch (e) { console.error("Manual sync failed", e); }
       setRefreshVocabReview(prev => prev + 1);
   };
 
-  const { totalEarned, currentScore, maxScore } = useMemo(() => {
+  const { totalEarned, currentScore, maxScore, totalCoins } = useMemo(() => {
     let total = 0;
     let score = 0;
+    let coins = 0;
     const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
     
     days.forEach(day => {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const log = logs[dateStr];
-        if (log?.totalMoney) {
-             total += log.totalMoney;
-             score += (log.totalMoney / 10);
+        if (log) {
+             if (log.totalMoney) {
+                 total += log.totalMoney;
+                 score += (log.totalMoney / 10);
+             }
+             if (log.dailyCoins) {
+                 coins += log.dailyCoins;
+             }
         }
     });
     
     return {
         totalEarned: total,
         currentScore: score,
-        maxScore: daysInMonth * 4
+        maxScore: daysInMonth * 4,
+        totalCoins: coins
     };
   }, [logs, year, month, daysInMonth]);
 
@@ -997,7 +1327,7 @@ export default function App() {
 
   const handleChoiceClick = () => {
     setShowChoiceMsg(true);
-    triggerCelebration(0); // Just confetti
+    triggerCelebration(0); 
     setTimeout(() => setShowChoiceMsg(false), 5000);
   };
 
@@ -1006,10 +1336,10 @@ export default function App() {
   const sliderMax = 90;
   
   const getSliderColor = (val: number) => {
-    if (val < 10) return '#facc15'; // Yellow
-    if (val < 30) return '#22c55e'; // Green
-    if (val < 60) return '#3b82f6'; // Blue
-    return '#9333ea'; // Purple
+    if (val < 10) return '#facc15';
+    if (val < 30) return '#22c55e';
+    if (val < 60) return '#3b82f6';
+    return '#9333ea';
   };
   
   const sliderColor = getSliderColor(currentMinutes);
@@ -1030,8 +1360,6 @@ export default function App() {
   // --- Timer Controls UI Helper ---
   const TaskTimerControls = ({ task, label, colorClass }: { task: 'speaking' | 'listening' | 'writing', label: string, colorClass: string }) => {
       const isActive = activeTask === task;
-      const currentTaskDuration = activeLog[`${task}Duration`] || 0;
-      
       return (
           <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200">
              <div className="flex items-center gap-3">
@@ -1048,7 +1376,6 @@ export default function App() {
                      </div>
                  )}
              </div>
-             
              <div className="flex items-center gap-2">
                  {isActive && (
                      <button
@@ -1070,11 +1397,7 @@ export default function App() {
                          ${(activeTask && !isActive) ? 'opacity-50 cursor-not-allowed' : ''}
                      `}
                  >
-                     {isActive ? (
-                         <><Square size={16} fill="currentColor" /> Complete</>
-                     ) : (
-                         <><Play size={16} fill="currentColor" /> Start Practice</>
-                     )}
+                     {isActive ? <><Square size={16} fill="currentColor" /> Complete</> : <><Play size={16} fill="currentColor" /> Start Practice</>}
                  </button>
              </div>
           </div>
@@ -1084,7 +1407,6 @@ export default function App() {
   // --- APP SCREEN ---
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800 pb-20">
-      {/* Dynamic Style for Slider Thumb & Track */}
       <style>{`
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
@@ -1104,7 +1426,6 @@ export default function App() {
             cursor: pointer;
             background: #e5e7eb;
             border-radius: 9999px;
-            /* Gradient fill logic */
             background-image: linear-gradient(to right, #facc15 0%, #22c55e 33%, #3b82f6 66%, #9333ea 100%);
             background-size: ${sliderPercentage}% 100%;
             background-repeat: no-repeat;
@@ -1113,7 +1434,6 @@ export default function App() {
 
       {showConfetti && <Confetti />}
       
-      {/* Toast Messages */}
       {(congratsMsg || showChoiceMsg) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl p-8 max-w-md text-center shadow-2xl transform scale-105">
@@ -1130,8 +1450,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Admin Dashboard Overlay */}
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
+      
+      {showArchive && (
+          <PersonalArchiveModal 
+            logs={logs} 
+            currentDate={currentDate} 
+            onClose={() => setShowArchive(false)} 
+          />
+      )}
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -1174,7 +1501,16 @@ export default function App() {
 
             <div className="flex flex-col items-end px-3 py-1 bg-green-50 rounded-lg border border-green-100 min-w-[100px]">
                 <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Month Total</span>
-                <span className="font-bold text-green-700">{totalEarned}k</span>
+                <span className="font-bold text-green-700 flex items-center gap-0.5">
+                    {totalEarned} <DollarSign size={12} strokeWidth={3} />
+                </span>
+            </div>
+            
+            <div className="flex flex-col items-end px-3 py-1 bg-yellow-50 rounded-lg border border-yellow-100 min-w-[80px]">
+                <span className="text-[10px] text-yellow-600 font-bold uppercase tracking-wider">Coins</span>
+                <span className="font-bold text-yellow-600 flex items-center gap-1">
+                    {totalCoins} <Coins size={12} fill="currentColor"/>
+                </span>
             </div>
           </div>
         </div>
@@ -1185,9 +1521,16 @@ export default function App() {
         {/* Monthly Score Progress Bar */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
              <div className="flex justify-between items-end mb-2">
-                 <h2 className="text-gray-700 font-bold text-lg">Monthly Score</h2>
-                 <div className="text-xl font-bold">
-                    <span className="text-teal-600">{currentScore}</span>
+                 <div className="flex items-center gap-2">
+                     <h2 className="text-gray-700 font-bold text-lg">Monthly Score</h2>
+                     <button onClick={() => setShowArchive(true)} className="p-1 text-indigo-500 hover:bg-indigo-50 rounded-full" title="Personal Archive">
+                         <Archive size={18} />
+                     </button>
+                 </div>
+                 <div className="text-xl font-bold flex items-center gap-1">
+                    <span className="text-teal-600 flex items-center">
+                        {currentScore} <DollarSign size={16} strokeWidth={3}/>
+                    </span>
                     <span className="text-gray-400 text-sm">/{maxScore}</span>
                  </div>
              </div>
@@ -1199,7 +1542,7 @@ export default function App() {
              </div>
         </section>
 
-        {/* Calendar Section (Updated to 8 Columns) */}
+        {/* Calendar Section */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 flex items-center justify-between border-b border-gray-100 bg-gray-50/50">
             <h2 className="font-semibold text-lg flex items-center gap-2 text-gray-700">
@@ -1211,46 +1554,33 @@ export default function App() {
               <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-200 rounded-full transition"><ChevronRight className="w-5 h-5" /></button>
             </div>
           </div>
-          
-          {/* Calendar Header */}
           <div className="grid grid-cols-8 text-center text-xs font-bold text-gray-400 py-3 border-b border-gray-100 bg-gray-50">
             <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div className="text-red-400">SUN</div>
             <div className="text-yellow-600">REWARD</div>
           </div>
-          
-          {/* Calendar Grid */}
           <div className="bg-gray-200 gap-[1px] border-b border-gray-100 flex flex-col gap-[1px]">
             {calendarWeeks.map((week, weekIndex) => {
-                // Check week completion
                 let isWeekComplete = true;
                 let hasRealDays = false;
-                
                 week.forEach(day => {
                     if (day) {
                         hasRealDays = true;
                         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        if (logs[dateStr]?.totalMoney !== 40) {
-                            isWeekComplete = false;
-                        }
+                        if (logs[dateStr]?.totalMoney !== 40) isWeekComplete = false;
                     }
                 });
-
                 if (!hasRealDays) isWeekComplete = false;
 
                 return (
                     <div key={weekIndex} className="grid grid-cols-8 gap-[1px]">
-                        {/* Days */}
                         {week.map((day, dayIndex) => {
                             if (!day) return <div key={`empty-${dayIndex}`} className="bg-white min-h-[90px]"></div>;
-                            
-                            // Use logical date for determining "isToday" visual highlight
                             const dateObj = new Date(year, month, day);
                             const dateStr = formatDate(dateObj);
                             const isSelected = selectedDateStr === dateStr;
                             const isToday = formatDate(getLogicalDate()) === dateStr;
                             const earned = logs[dateStr]?.totalMoney || 0;
                             const studyMins = logs[dateStr]?.studyMinutes || 0;
-                            
                             let colorClass = 'bg-white hover:bg-gray-50';
                             if (earned === 10) colorClass = 'bg-yellow-50 hover:bg-yellow-100';
                             if (earned === 20) colorClass = 'bg-yellow-100 hover:bg-yellow-200';
@@ -1261,37 +1591,25 @@ export default function App() {
                                 <div 
                                     key={day}
                                     onClick={() => setSelectedDateStr(dateStr)}
-                                    className={`
-                                        relative min-h-[90px] p-2 cursor-pointer transition-all duration-200
-                                        flex flex-col justify-between group
-                                        ${colorClass}
-                                        ${isSelected ? 'ring-2 ring-blue-500 z-10' : ''}
-                                    `}
+                                    className={`relative min-h-[90px] p-2 cursor-pointer transition-all duration-200 flex flex-col justify-between group ${colorClass} ${isSelected ? 'ring-2 ring-blue-500 z-10' : ''}`}
                                 >
                                     <div className="flex justify-between items-start">
-                                        <span className={`
-                                            text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                                            ${isToday ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600'}
-                                        `}>
+                                        <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600'}`}>
                                             {day}
                                         </span>
                                     </div>
                                     <div className="self-end flex flex-col items-end gap-0.5">
                                         {studyMins > 0 && <span className="text-[10px] bg-white/50 px-1 rounded text-gray-600 font-medium">{studyMins}m</span>}
-                                        {earned > 0 && <span className={`text-xs font-bold ${earned === 40 ? 'text-green-700' : 'text-gray-600'}`}>{earned}k</span>}
+                                        {earned > 0 && <span className={`text-xs font-bold flex items-center ${earned === 40 ? 'text-green-700' : 'text-gray-600'}`}>
+                                            {earned} <DollarSign size={10} strokeWidth={3}/>
+                                        </span>}
                                         {earned === 40 && <CheckCircle className="w-3 h-3 text-green-600" />}
                                     </div>
                                 </div>
                             );
                         })}
-                        {/* Weekly Reward Cell */}
                         <div className="bg-gray-50 min-h-[90px] flex items-center justify-center border-l border-gray-100">
-                            <div className={`
-                                p-3 rounded-full transition-all duration-500
-                                ${isWeekComplete 
-                                    ? 'bg-yellow-100 text-yellow-600 shadow-md ring-4 ring-yellow-50 scale-110' 
-                                    : 'bg-gray-100 text-gray-300 grayscale'}
-                            `}>
+                            <div className={`p-3 rounded-full transition-all duration-500 ${isWeekComplete ? 'bg-yellow-100 text-yellow-600 shadow-md ring-4 ring-yellow-50 scale-110' : 'bg-gray-100 text-gray-300 grayscale'}`}>
                                 <Gift size={24} fill={isWeekComplete ? "currentColor" : "none"} />
                             </div>
                         </div>
@@ -1315,17 +1633,10 @@ export default function App() {
                 </div>
             </div>
             <div className="flex gap-3">
-                <button 
-                    onClick={() => setTimerRunning(!timerRunning)}
-                    className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold transition-all ${timerRunning ? 'bg-indigo-700 text-indigo-100 hover:bg-indigo-600' : 'bg-green-500 text-white hover:bg-green-600 shadow-lg hover:shadow-green-500/30'}`}
-                >
+                <button onClick={() => setTimerRunning(!timerRunning)} className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold transition-all ${timerRunning ? 'bg-indigo-700 text-indigo-100 hover:bg-indigo-600' : 'bg-green-500 text-white hover:bg-green-600 shadow-lg hover:shadow-green-500/30'}`}>
                     {timerRunning ? <><Pause size={18} /> Pause</> : <><Play size={18} /> Start</>}
                 </button>
-                <button 
-                    onClick={() => { setTimerRunning(false); setElapsedTime(0); }}
-                    className="p-2 rounded-full bg-indigo-800 text-indigo-300 hover:bg-indigo-700 transition"
-                    title="Reset"
-                >
+                <button onClick={() => { setTimerRunning(false); setElapsedTime(0); }} className="p-2 rounded-full bg-indigo-800 text-indigo-300 hover:bg-indigo-700 transition" title="Reset">
                     <RotateCcw size={18} />
                 </button>
             </div>
@@ -1333,7 +1644,6 @@ export default function App() {
 
         {/* Detail Section */}
         <section className="bg-white rounded-xl shadow-lg border border-blue-100 overflow-hidden transition-all duration-500">
-          
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex justify-between items-center">
             <div>
               <h3 className="font-bold text-2xl">Daily Mission</h3>
@@ -1343,21 +1653,24 @@ export default function App() {
               </p>
             </div>
             <div className="text-right bg-white/10 p-3 rounded-lg backdrop-blur-sm border border-white/10">
-              <div className="text-3xl font-bold">{activeLog.totalMoney}k</div>
+              <div className="text-3xl font-bold flex items-center gap-1 justify-end">
+                  {activeLog.totalMoney} <DollarSign size={24} strokeWidth={3} />
+              </div>
               <div className="text-[10px] text-blue-100 uppercase tracking-wider font-semibold">Earned Today</div>
             </div>
           </div>
 
           <div className="p-6 space-y-8">
             
-            {/* Task 1: Vocabulary */}
+            {/* Task 1 */}
             <div className="space-y-4">
               <div className="flex items-center gap-3 text-blue-800 font-bold text-lg border-b border-blue-100 pb-2">
                 <div className="p-2 bg-blue-100 rounded-lg text-blue-600"><BookOpen size={20} /></div>
                 <span>Task 1: Vocabulary</span>
-                <span className="ml-auto text-xs font-normal bg-blue-50 text-blue-600 px-2 py-1 rounded-full border border-blue-100">10k Reward</span>
+                <span className="ml-auto text-xs font-normal bg-blue-50 text-blue-600 px-2 py-1 rounded-full border border-blue-100 flex items-center gap-0.5">
+                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                </span>
               </div>
-              
               <div className="bg-blue-50/50 rounded-lg border border-blue-100 overflow-hidden">
                 <button onClick={() => setExpandedSection(expandedSection === 1 ? null : 1)} className="w-full px-4 py-2 flex items-center justify-between text-sm text-blue-600 font-medium hover:bg-blue-50 transition">
                    <span className="flex items-center gap-2"><Info size={16}/> How to complete?</span>
@@ -1378,65 +1691,37 @@ export default function App() {
                     </div>
                 )}
               </div>
-
-              {/* Word 1 */}
               <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div className="md:col-span-1">
-                        <input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Meaning (VN)" value={activeLog.vocab1Meaning} onChange={(e) => handleUpdateLog('vocab1Meaning', e.target.value)} />
-                    </div>
-                    <div className="md:col-span-1">
-                        <input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-medium text-blue-700" placeholder="Vocabulary" value={activeLog.vocab1Word} onChange={(e) => handleUpdateLog('vocab1Word', e.target.value)} />
-                    </div>
-                    <div className="md:col-span-2">
-                        <input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Memorization / Example (min 2 words)" value={activeLog.vocab1Method} onChange={(e) => handleUpdateLog('vocab1Method', e.target.value)} />
-                    </div>
+                    <div className="md:col-span-1"><input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Meaning (VN)" value={activeLog.vocab1Meaning} onChange={(e) => handleUpdateLog('vocab1Meaning', e.target.value)} /></div>
+                    <div className="md:col-span-1"><input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-medium text-blue-700" placeholder="Vocabulary" value={activeLog.vocab1Word} onChange={(e) => handleUpdateLog('vocab1Word', e.target.value)} /></div>
+                    <div className="md:col-span-2"><input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Memorization / Example (min 2 words)" value={activeLog.vocab1Method} onChange={(e) => handleUpdateLog('vocab1Method', e.target.value)} /></div>
                   </div>
               </div>
-
-               {/* Word 2 */}
                <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-100">
                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div className="md:col-span-1">
-                        <input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Meaning (VN)" value={activeLog.vocab2Meaning} onChange={(e) => handleUpdateLog('vocab2Meaning', e.target.value)} />
-                    </div>
-                    <div className="md:col-span-1">
-                        <input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-medium text-blue-700" placeholder="Vocabulary" value={activeLog.vocab2Word} onChange={(e) => handleUpdateLog('vocab2Word', e.target.value)} />
-                    </div>
-                    <div className="md:col-span-2">
-                        <input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Memorization / Example (min 2 words)" value={activeLog.vocab2Method} onChange={(e) => handleUpdateLog('vocab2Method', e.target.value)} />
-                    </div>
+                    <div className="md:col-span-1"><input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Meaning (VN)" value={activeLog.vocab2Meaning} onChange={(e) => handleUpdateLog('vocab2Meaning', e.target.value)} /></div>
+                    <div className="md:col-span-1"><input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition font-medium text-blue-700" placeholder="Vocabulary" value={activeLog.vocab2Word} onChange={(e) => handleUpdateLog('vocab2Word', e.target.value)} /></div>
+                    <div className="md:col-span-2"><input disabled={isLocked} className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Memorization / Example (min 2 words)" value={activeLog.vocab2Method} onChange={(e) => handleUpdateLog('vocab2Method', e.target.value)} /></div>
                   </div>
               </div>
-
               <div className="flex justify-end">
-                <button 
-                  disabled={isLocked || (!isVocabReady && !activeLog.vocabDone)}
-                  onClick={() => handleUpdateLog('vocabDone', !activeLog.vocabDone)}
-                  className={`
-                    px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm
-                    ${activeLog.vocabDone 
-                        ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' 
-                        : isVocabReady 
-                            ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse' 
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }
-                  `}
-                >
+                <button disabled={isLocked || (!isVocabReady && !activeLog.vocabDone)} onClick={() => handleUpdateLog('vocabDone', !activeLog.vocabDone)} className={`px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm ${activeLog.vocabDone ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' : isVocabReady ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                   {activeLog.vocabDone ? <><CheckCircle size={18}/> Done</> : 'Mark Done'}
                 </button>
               </div>
               {activeLog.vocabTimestamp && <div className="text-right text-xs text-gray-400">Completed at: {activeLog.vocabTimestamp}</div>}
             </div>
 
-            {/* Task 2: Speaking */}
+            {/* Task 2 */}
             <div className="space-y-4">
                <div className="flex items-center gap-3 text-purple-800 font-bold text-lg border-b border-purple-100 pb-2">
                 <div className="p-2 bg-purple-100 rounded-lg text-purple-600"><Mic size={20} /></div>
                 <span>Task 2: Speaking (2 mins)</span>
-                <span className="ml-auto text-xs font-normal bg-purple-50 text-purple-600 px-2 py-1 rounded-full border border-purple-100">10k Reward</span>
+                <span className="ml-auto text-xs font-normal bg-purple-50 text-purple-600 px-2 py-1 rounded-full border border-purple-100 flex items-center gap-0.5">
+                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                </span>
               </div>
-              
               <div className="bg-purple-50/50 rounded-lg border border-purple-100 overflow-hidden">
                 <button onClick={() => setExpandedSection(expandedSection === 2 ? null : 2)} className="w-full px-4 py-2 flex items-center justify-between text-sm text-purple-600 font-medium hover:bg-purple-50 transition">
                    <span className="flex items-center gap-2"><Info size={16}/> Need a topic?</span>
@@ -1444,9 +1729,7 @@ export default function App() {
                 </button>
                 {expandedSection === 2 && (
                     <div className="px-4 pb-3 space-y-3">
-                        <div className="text-sm text-gray-600 leading-relaxed">
-                            Stuck? Use the tools below to find topics or practice reading.
-                        </div>
+                        <div className="text-sm text-gray-600 leading-relaxed">Stuck? Use the tools below to find topics or practice reading.</div>
                         <div className="flex flex-wrap gap-2 pt-1 border-t border-purple-100">
                              <ResourceLink href="https://readalong.google.com/" label="Google Read Along" colorClass="bg-purple-100 text-purple-700 hover:bg-purple-200" />
                              <ResourceLink href="https://www.conversationstarters.com/generator.php" label="Topic Generator" colorClass="bg-purple-100 text-purple-700 hover:bg-purple-200" />
@@ -1456,29 +1739,14 @@ export default function App() {
                     </div>
                 )}
               </div>
-
-              {/* Timer Control */}
               <TaskTimerControls task="speaking" label="Start Speaking" colorClass="bg-purple-500" />
-
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 space-y-2">
                     <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Topic (e.g. My Hobbies)" value={activeLog.speakingTopic} onChange={(e) => handleUpdateLog('speakingTopic', e.target.value)} />
                     <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="Vocab learned from this topic (Required)" value={activeLog.speakingVocab} onChange={(e) => handleUpdateLog('speakingVocab', e.target.value)} />
                 </div>
                 <div className="flex items-end">
-                    <button 
-                    disabled={isLocked || (!isSpeakingReady && !activeLog.speakingDone)}
-                    onClick={() => handleUpdateLog('speakingDone', !activeLog.speakingDone)}
-                    className={`
-                        h-[50px] px-6 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm
-                        ${activeLog.speakingDone 
-                            ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' 
-                            : isSpeakingReady
-                                ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse'
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }
-                    `}
-                    >
+                    <button disabled={isLocked || (!isSpeakingReady && !activeLog.speakingDone)} onClick={() => handleUpdateLog('speakingDone', !activeLog.speakingDone)} className={`h-[50px] px-6 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm ${activeLog.speakingDone ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' : isSpeakingReady ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                     {activeLog.speakingDone ? <><CheckCircle size={18}/> Done</> : 'Mark Done'}
                     </button>
                 </div>
@@ -1486,14 +1754,15 @@ export default function App() {
               {activeLog.speakingTimestamp && <div className="text-right text-xs text-gray-400">Completed at: {activeLog.speakingTimestamp}</div>}
             </div>
 
-            {/* Task 3: Listening */}
+            {/* Task 3 */}
              <div className="space-y-4">
                <div className="flex items-center gap-3 text-orange-800 font-bold text-lg border-b border-orange-100 pb-2">
                 <div className="p-2 bg-orange-100 rounded-lg text-orange-600"><Headphones size={20} /></div>
                 <span>Task 3: Listening (10 mins)</span>
-                <span className="ml-auto text-xs font-normal bg-orange-50 text-orange-600 px-2 py-1 rounded-full border border-orange-100">10k Reward</span>
+                <span className="ml-auto text-xs font-normal bg-orange-50 text-orange-600 px-2 py-1 rounded-full border border-orange-100 flex items-center gap-0.5">
+                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                </span>
               </div>
-              
               <div className="bg-orange-50/50 rounded-lg border border-orange-100 overflow-hidden">
                 <button onClick={() => setExpandedSection(expandedSection === 3 ? null : 3)} className="w-full px-4 py-2 flex items-center justify-between text-sm text-orange-600 font-medium hover:bg-orange-50 transition">
                    <span className="flex items-center gap-2"><Info size={16}/> Suggestions</span>
@@ -1501,9 +1770,7 @@ export default function App() {
                 </button>
                 {expandedSection === 3 && (
                     <div className="px-4 pb-3 space-y-3">
-                        <div className="text-sm text-gray-600 leading-relaxed">
-                            Choose a level below. Listen and paste the YouTube link to complete.
-                        </div>
+                        <div className="text-sm text-gray-600 leading-relaxed">Choose a level below. Listen and paste the YouTube link to complete.</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-orange-100">
                              <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Pronunciation</span>
@@ -1530,44 +1797,23 @@ export default function App() {
                     </div>
                 )}
               </div>
-
-              {/* Timer Control */}
               <TaskTimerControls task="listening" label="Start Listening" colorClass="bg-orange-500" />
-
               <div className="grid grid-cols-1 gap-3">
                   <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Topic (e.g. News on Space)" value={activeLog.listeningTopic} onChange={(e) => handleUpdateLog('listeningTopic', e.target.value)} />
-                  
                   <div className="relative flex gap-2">
                         <div className="relative flex-1">
                             <LinkIcon className="absolute left-3 top-3.5 text-gray-400" size={16} />
                             <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Paste YouTube Link Here (Optional)" value={activeLog.listeningLink} onChange={(e) => handleUpdateLog('listeningLink', e.target.value)} />
                         </div>
                         {activeLog.listeningLink && (
-                            <button 
-                                onClick={() => window.open(activeLog.listeningLink, '_blank')}
-                                className="px-3 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition flex items-center justify-center"
-                                title="Open Link"
-                            >
+                            <button onClick={() => window.open(activeLog.listeningLink, '_blank')} className="px-3 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition flex items-center justify-center" title="Open Link">
                                 <ExternalLink size={20} />
                             </button>
                         )}
                   </div>
-                  
                   <div className="flex flex-col md:flex-row gap-4">
                     <input disabled={isLocked} className="flex-1 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Vocab learned from listening (Required)" value={activeLog.listeningVocab} onChange={(e) => handleUpdateLog('listeningVocab', e.target.value)} />
-                    <button 
-                    disabled={isLocked || (!isListeningReady && !activeLog.listeningDone)}
-                    onClick={() => handleUpdateLog('listeningDone', !activeLog.listeningDone)}
-                    className={`
-                        px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm
-                        ${activeLog.listeningDone 
-                            ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' 
-                            : isListeningReady
-                                ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse'
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }
-                    `}
-                    >
+                    <button disabled={isLocked || (!isListeningReady && !activeLog.listeningDone)} onClick={() => handleUpdateLog('listeningDone', !activeLog.listeningDone)} className={`px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm ${activeLog.listeningDone ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' : isListeningReady ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                     {activeLog.listeningDone ? <><CheckCircle size={18}/> Done</> : 'Mark Done'}
                     </button>
                   </div>
@@ -1575,14 +1821,15 @@ export default function App() {
               {activeLog.listeningTimestamp && <div className="text-right text-xs text-gray-400">Completed at: {activeLog.listeningTimestamp}</div>}
             </div>
 
-            {/* Task 4: Writing */}
+            {/* Task 4 */}
              <div className="space-y-4">
                <div className="flex items-center gap-3 text-pink-800 font-bold text-lg border-b border-pink-100 pb-2">
                 <div className="p-2 bg-pink-100 rounded-lg text-pink-600"><PenTool size={20} /></div>
                 <span>Task 4: Writing / Grammar</span>
-                <span className="ml-auto text-xs font-normal bg-pink-50 text-pink-600 px-2 py-1 rounded-full border border-pink-100">10k Reward</span>
+                <span className="ml-auto text-xs font-normal bg-pink-50 text-pink-600 px-2 py-1 rounded-full border border-pink-100 flex items-center gap-0.5">
+                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                </span>
               </div>
-              
                <div className="bg-pink-50/50 rounded-lg border border-pink-100 overflow-hidden">
                 <button onClick={() => setExpandedSection(expandedSection === 4 ? null : 4)} className="w-full px-4 py-2 flex items-center justify-between text-sm text-pink-600 font-medium hover:bg-pink-50 transition">
                    <span className="flex items-center gap-2"><Info size={16}/> Resources & Prompts</span>
@@ -1617,37 +1864,14 @@ export default function App() {
                     </div>
                 )}
               </div>
-
-              {/* Timer Control */}
               <TaskTimerControls task="writing" label="Start Writing" colorClass="bg-pink-500" />
-
               <div className="flex flex-col gap-2">
                 <div className="relative">
-                    <textarea 
-                        disabled={isLocked} 
-                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-500 outline-none min-h-[100px]" 
-                        placeholder="Write at least 30 words here..." 
-                        value={activeLog.writingContent} 
-                        onChange={(e) => handleUpdateLog('writingContent', e.target.value)} 
-                    />
-                    <div className={`absolute bottom-3 right-3 text-xs font-bold ${currentWordCount >= 30 ? 'text-green-600' : 'text-gray-400'}`}>
-                        {currentWordCount}/30 words
-                    </div>
+                    <textarea disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-pink-500 outline-none min-h-[100px]" placeholder="Write at least 30 words here..." value={activeLog.writingContent} onChange={(e) => handleUpdateLog('writingContent', e.target.value)} />
+                    <div className={`absolute bottom-3 right-3 text-xs font-bold ${currentWordCount >= 30 ? 'text-green-600' : 'text-gray-400'}`}>{currentWordCount}/30 words</div>
                 </div>
                 <div className="self-end">
-                    <button 
-                    disabled={isLocked || (!isWritingReady && !activeLog.writingDone)}
-                    onClick={() => handleUpdateLog('writingDone', !activeLog.writingDone)}
-                    className={`
-                        px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm
-                        ${activeLog.writingDone 
-                            ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' 
-                            : isWritingReady
-                                ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse'
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }
-                    `}
-                    >
+                    <button disabled={isLocked || (!isWritingReady && !activeLog.writingDone)} onClick={() => handleUpdateLog('writingDone', !activeLog.writingDone)} className={`px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all min-w-[160px] shadow-sm ${activeLog.writingDone ? 'bg-green-500 text-white hover:bg-green-600 ring-2 ring-green-300 ring-offset-1' : isWritingReady ? 'bg-green-600 text-white hover:bg-green-700 animate-pulse' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
                     {activeLog.writingDone ? <><CheckCircle size={18}/> Done</> : 'Mark Done'}
                     </button>
                 </div>
@@ -1655,29 +1879,26 @@ export default function App() {
               {activeLog.writingTimestamp && <div className="text-right text-xs text-gray-400">Completed at: {activeLog.writingTimestamp}</div>}
             </div>
 
+            {/* Challenges */}
+            <ChallengeSection 
+                log={activeLog} 
+                logs={logs}
+                dateStr={selectedDateStr}
+                onUpdate={(updates) => handleUpdateLog(updates)}
+            />
+
           </div>
         </section>
 
          {/* Weekly Reward Info & Slider */}
          <section className="bg-white rounded-xl shadow-lg border border-yellow-200 overflow-hidden">
-             {/* Slider */}
              <div className="bg-gray-50 p-6 border-b border-gray-100">
                 <h4 className="text-gray-700 font-bold mb-1 text-center">Every minute you commit counts—be aware of it.</h4>
                 <p className="text-gray-500 text-sm mb-6 text-center italic">Hãy ghi nhận những nỗ lực bạn đã thực hiện ngày hôm nay!</p>
                 <div className="px-2 pt-4 pb-2">
                     <div className="relative mb-6">
-                        <input
-                            type="range"
-                            min="0"
-                            max="90"
-                            step="5"
-                            disabled={isLocked}
-                            value={activeLog.studyMinutes || 0}
-                            onChange={(e) => handleUpdateLog('studyMinutes', parseInt(e.target.value))}
-                            className="w-full h-3 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        />
+                        <input type="range" min="0" max="90" step="5" disabled={isLocked} value={activeLog.studyMinutes || 0} onChange={(e) => handleUpdateLog('studyMinutes', parseInt(e.target.value))} className="w-full h-3 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" />
                     </div>
-                    
                     <div className="flex justify-between items-end relative px-1">
                         {sliderMilestones.map((m) => {
                             const isActive = (activeLog.studyMinutes || 0) >= m.val;
@@ -1689,14 +1910,11 @@ export default function App() {
                             )
                         })}
                     </div>
-                    
                     <div className="text-center mt-5 font-bold text-2xl transition-colors duration-300" style={{ color: sliderColor }}>
                         {activeLog.studyMinutes || 0} minutes
                     </div>
                 </div>
              </div>
-
-             {/* Bonus Info */}
              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 text-center">
                 <h4 className="text-yellow-800 font-bold mb-2 flex items-center justify-center gap-2">
                     <DollarSign className="w-5 h-5" /> Bonus Rewards
@@ -1720,30 +1938,10 @@ export default function App() {
                  </h3>
              </div>
              <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center">
-                     <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Speaking</span>
-                     <div className="text-lg font-bold text-purple-600">
-                         {formatMiniDuration(activeLog.speakingDuration || 0)}
-                     </div>
-                 </div>
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center">
-                     <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Listening</span>
-                     <div className="text-lg font-bold text-orange-600">
-                         {formatMiniDuration(activeLog.listeningDuration || 0)}
-                     </div>
-                 </div>
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center">
-                     <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Writing</span>
-                     <div className="text-lg font-bold text-pink-600">
-                         {formatMiniDuration(activeLog.writingDuration || 0)}
-                     </div>
-                 </div>
-                 <div className="bg-teal-100 p-3 rounded-lg border border-teal-200 text-center">
-                     <span className="text-xs text-teal-800 uppercase font-bold tracking-wider">Total Time</span>
-                     <div className="text-lg font-bold text-teal-900">
-                         {formatMiniDuration((activeLog.speakingDuration || 0) + (activeLog.listeningDuration || 0) + (activeLog.writingDuration || 0))}
-                     </div>
-                 </div>
+                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center"><span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Speaking</span><div className="text-lg font-bold text-purple-600">{formatMiniDuration(activeLog.speakingDuration || 0)}</div></div>
+                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center"><span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Listening</span><div className="text-lg font-bold text-orange-600">{formatMiniDuration(activeLog.listeningDuration || 0)}</div></div>
+                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-center"><span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Writing</span><div className="text-lg font-bold text-pink-600">{formatMiniDuration(activeLog.writingDuration || 0)}</div></div>
+                 <div className="bg-teal-100 p-3 rounded-lg border border-teal-200 text-center"><span className="text-xs text-teal-800 uppercase font-bold tracking-wider">Total Time</span><div className="text-lg font-bold text-teal-900">{formatMiniDuration((activeLog.speakingDuration || 0) + (activeLog.listeningDuration || 0) + (activeLog.writingDuration || 0))}</div></div>
              </div>
          </section>
 
@@ -1754,12 +1952,8 @@ export default function App() {
                      <BookOpen size={20} />
                      Monthly Vocabulary Review
                  </h3>
-                 <button
-                    onClick={handleRefreshVocab}
-                    className="text-xs bg-sky-100 text-sky-700 px-3 py-1.5 rounded-full hover:bg-sky-200 transition font-medium flex items-center gap-1 shadow-sm"
-                 >
-                    <RefreshCw size={12} />
-                    Update List
+                 <button onClick={handleRefreshVocab} className="text-xs bg-sky-100 text-sky-700 px-3 py-1.5 rounded-full hover:bg-sky-200 transition font-medium flex items-center gap-1 shadow-sm">
+                    <RefreshCw size={12} /> Update List
                  </button>
              </div>
              <div className="p-4 space-y-2">
@@ -1772,19 +1966,12 @@ export default function App() {
                              </span>
                          </summary>
                          <div className="p-3 pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                             {week.words.length === 0 ? (
-                                 <p className="text-sm text-gray-400 italic col-span-full text-center py-2">No words recorded yet.</p>
-                             ) : (
-                                 week.words.map((item, i) => (
-                                     <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-indigo-100 text-sm shadow-sm">
-                                         <div>
-                                             <span className="font-bold text-indigo-700">{item.word}</span>
-                                             {item.meaning && <span className="text-gray-500 block text-xs">{item.meaning}</span>}
-                                         </div>
-                                         <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">Day {item.day}</span>
-                                     </div>
-                                 ))
-                             )}
+                             {week.words.length === 0 ? <p className="text-sm text-gray-400 italic col-span-full text-center py-2">No words recorded yet.</p> : week.words.map((item, i) => (
+                                 <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-indigo-100 text-sm shadow-sm">
+                                     <div><span className="font-bold text-indigo-700">{item.word}</span>{item.meaning && <span className="text-gray-500 block text-xs">{item.meaning}</span>}</div>
+                                     <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">Day {item.day}</span>
+                                 </div>
+                             ))}
                          </div>
                      </details>
                  ))}
@@ -1799,42 +1986,18 @@ export default function App() {
             <div className="space-y-4">
                 <p className="text-xl font-medium flex flex-wrap justify-center items-center gap-2">
                     <span>I am</span>
-                    <input 
-                        type="text" 
-                        value={userName} 
-                        onChange={(e) => setUserName(e.target.value)}
-                        placeholder="[ Your Name ]"
-                        className="bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-40 placeholder-gray-500"
-                    />
+                    <input type="text" value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="[ Your Name ]" className="bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-40 placeholder-gray-500" />
                     <span>. I am a</span>
-                    <input 
-                        type="text" 
-                        value={profession} 
-                        onChange={(e) => setProfession(e.target.value)}
-                        placeholder="[ expert / ... ]"
-                        className="bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-32 placeholder-gray-500"
-                    />. 
+                    <input type="text" value={profession} onChange={(e) => setProfession(e.target.value)} placeholder="[ expert / ... ]" className="bg-transparent border-b border-gray-500 text-center text-white focus:outline-none focus:border-white transition-colors w-32 placeholder-gray-500" />. 
                     <span>I dedicate this time for my own happiness!</span>
                 </p>
                 <p className="text-gray-500 text-sm">
-                    Tôi là
-                    <span className="mx-1 border-b border-gray-600 px-2 inline-block min-w-[50px] text-gray-400">
-                        {userName || "..."}
-                    </span>, 
-                    tôi là một chuyên gia 
-                    <span className="mx-1 border-b border-gray-600 px-2 inline-block min-w-[50px] text-gray-400">
-                        {profession || "..."}
-                    </span>, 
+                    Tôi là <span className="mx-1 border-b border-gray-600 px-2 inline-block min-w-[50px] text-gray-400">{userName || "..."}</span>, 
+                    tôi là một chuyên gia <span className="mx-1 border-b border-gray-600 px-2 inline-block min-w-[50px] text-gray-400">{profession || "..."}</span>, 
                     tôi dành thời gian này vì hạnh phúc của chính mình!
                 </p>
             </div>
-            
-            <button 
-                onClick={handleChoiceClick}
-                className="bg-white text-gray-900 px-8 py-3 rounded-full font-bold hover:bg-gray-200 transition-transform active:scale-95 shadow-lg"
-            >
-                This is My Choice
-            </button>
+            <button onClick={handleChoiceClick} className="bg-white text-gray-900 px-8 py-3 rounded-full font-bold hover:bg-gray-200 transition-transform active:scale-95 shadow-lg">This is My Choice</button>
          </section>
 
       </main>
