@@ -218,16 +218,59 @@ const Confetti = () => {
 // --- Daily Quote Component ---
 const DailyQuote = () => {
     const [quote, setQuote] = useState<QuoteItem | null>(null);
+    const [theme, setTheme] = useState("from-violet-500 to-fuchsia-500");
 
     useEffect(() => {
+        const updateQuoteAndTheme = (quotes: QuoteItem[]) => {
+            const now = new Date();
+            const hour = now.getHours();
+            
+            // Calculate Day of Year for rotation
+            // Logic: If hour < 7, it belongs to the "previous night" slot, so we use (dayOfYear - 1)
+            let dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
+            
+            let slotIndex = 3; // Default to Night Slot (23h-7h)
+            let bgClass = "from-violet-600 to-indigo-600"; // Night Purple
+
+            if (hour >= 7 && hour < 13) {
+                slotIndex = 0; // Morning
+                bgClass = "from-sky-400 to-blue-500"; // Sky Blue
+            } else if (hour >= 13 && hour < 19) {
+                slotIndex = 1; // Afternoon
+                bgClass = "from-emerald-400 to-teal-500"; // Energetic Green
+            } else if (hour >= 19 && hour < 23) {
+                slotIndex = 2; // Evening
+                bgClass = "from-orange-400 to-rose-500"; // Sunset Orange/Pink
+            } else {
+                // Late Night (23h - 7h)
+                slotIndex = 3;
+                bgClass = "from-violet-600 to-indigo-600";
+                // If it's early morning (0h-7h), we want to keep the quote from the previous night (23h)
+                if (hour < 7) {
+                    dayOfYear -= 1; 
+                }
+            }
+
+            if (quotes && quotes.length > 0) {
+                // Rotate quotes based on day and slot
+                // Use absolute value for dayOfYear to handle potentially negative value if year just started
+                const effectiveDay = Math.abs(dayOfYear);
+                const quoteIndex = (effectiveDay * 4 + slotIndex) % quotes.length;
+                setQuote(quotes[quoteIndex]);
+            }
+            setTheme(bgClass);
+        };
+
+        const fallbacks = [
+            { text: "The expert in anything was once a beginner.", meaning: "Chuyên gia trong bất cứ lĩnh vực nào cũng từng là người mới bắt đầu." },
+            { text: "Consistency is what transforms average into excellence.", meaning: "Sự kiên trì là thứ biến điều bình thường thành xuất sắc." },
+            { text: "Don't watch the clock; do what it does. Keep going.", meaning: "Đừng nhìn đồng hồ; hãy làm những gì nó làm. Tiếp tục đi." },
+            { text: "Your future is created by what you do today, not tomorrow.", meaning: "Tương lai của bạn được tạo ra bởi những gì bạn làm hôm nay, không phải ngày mai." },
+             { text: "Believe you can and you're halfway there.", meaning: "Tin rằng bạn có thể làm được nghĩa là bạn đã đi được một nửa chặng đường." }
+        ];
+
         if (!db) {
-            const fallbacks = [
-                { text: "The expert in anything was once a beginner.", meaning: "Chuyên gia trong bất cứ lĩnh vực nào cũng từng là người mới bắt đầu." },
-                { text: "Consistency is what transforms average into excellence.", meaning: "Sự kiên trì là thứ biến điều bình thường thành xuất sắc." },
-                { text: "Don't watch the clock; do what it does. Keep going.", meaning: "Đừng nhìn đồng hồ; hãy làm những gì nó làm. Tiếp tục đi." }
-            ];
-            const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
-            setQuote(fallbacks[dayOfYear % fallbacks.length]);
+            updateQuoteAndTheme(fallbacks);
             return;
         }
         
@@ -235,12 +278,9 @@ const DailyQuote = () => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const quotes = data.items as QuoteItem[];
-                if (quotes && quotes.length > 0) {
-                    const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
-                    setQuote(quotes[dayOfYear % quotes.length]);
-                }
+                updateQuoteAndTheme((quotes && quotes.length > 0) ? quotes : fallbacks);
             } else {
-                 setQuote({ text: "Every day is a new beginning.", meaning: "Mỗi ngày là một khởi đầu mới." });
+                 updateQuoteAndTheme(fallbacks);
             }
         });
         return () => unsub();
@@ -249,8 +289,8 @@ const DailyQuote = () => {
     if (!quote) return null;
 
     return (
-        <section className="relative overflow-hidden rounded-xl shadow-lg border-0 my-6">
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-fuchsia-500 opacity-90"></div>
+        <section className="relative overflow-hidden rounded-xl shadow-lg border-0 my-6 transition-all duration-1000">
+            <div className={`absolute inset-0 bg-gradient-to-r ${theme} opacity-90 transition-all duration-1000`}></div>
             <div className="relative p-8 text-center text-white flex flex-col items-center">
                 <Quote size={32} className="mb-4 text-white/40" />
                 <p className="text-xl md:text-2xl font-serif italic font-medium leading-relaxed max-w-2xl mb-2">
