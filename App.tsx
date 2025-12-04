@@ -4,13 +4,13 @@ import { initializeApp } from 'firebase/app';
 // @ts-ignore
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 // @ts-ignore
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, limit, getDoc } from 'firebase/firestore';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
   DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
   Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon,
-  Timer, Square, RefreshCw, Shield, X
+  Timer, Square, RefreshCw, Shield, X, Plus, Trash2, Quote
 } from 'lucide-react';
 
 // --- CONSTANTS ---
@@ -123,6 +123,11 @@ interface StudentSummary {
     lastActive: string;
     currentMonthScore: number;
     totalStudyMinutes: number;
+}
+
+interface QuoteItem {
+    text: string;
+    author: string;
 }
 
 // --- Helper Functions ---
@@ -254,85 +259,272 @@ const Confetti = () => {
   return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-50" />;
 };
 
-// --- Admin Dashboard Component ---
-const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
-    const [students, setStudents] = useState<StudentSummary[]>([]);
-    const [loading, setLoading] = useState(true);
+// --- Daily Quote Component ---
+const DailyQuote = () => {
+    const [quote, setQuote] = useState<QuoteItem | null>(null);
 
     useEffect(() => {
-        if (!db) return;
+        if (!db) {
+            // Fallback quotes if DB not ready
+            const fallbacks = [
+                { text: "The expert in anything was once a beginner.", author: "Helen Hayes" },
+                { text: "Consistency is what transforms average into excellence.", author: "Unknown" },
+                { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" }
+            ];
+             // Pick based on day of year to be consistent for the day
+            const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
+            setQuote(fallbacks[dayOfYear % fallbacks.length]);
+            return;
+        }
+        
+        const unsub = onSnapshot(doc(db, 'artifacts', appId, 'global_settings', 'quotes'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const quotes = data.items as QuoteItem[];
+                if (quotes && quotes.length > 0) {
+                     // Pick based on day of year
+                    const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
+                    setQuote(quotes[dayOfYear % quotes.length]);
+                }
+            } else {
+                 // Fallback if no quotes in DB
+                 setQuote({ text: "Every day is a new beginning.", author: "Unknown" });
+            }
+        });
+        return () => unsub();
+    }, []);
+
+    if (!quote) return null;
+
+    return (
+        <section className="relative overflow-hidden rounded-xl shadow-lg border-0 my-6">
+            <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-fuchsia-500 opacity-90"></div>
+            <div className="relative p-8 text-center text-white flex flex-col items-center">
+                <Quote size={32} className="mb-4 text-white/40" />
+                <p className="text-xl md:text-2xl font-serif italic font-medium leading-relaxed max-w-2xl">
+                    "{quote.text}"
+                </p>
+                <div className="mt-4 flex items-center gap-2 text-sm font-medium uppercase tracking-widest text-white/70">
+                    <div className="h-px w-8 bg-white/50"></div>
+                    {quote.author}
+                    <div className="h-px w-8 bg-white/50"></div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+// --- Admin Dashboard Component ---
+const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
+    const [activeTab, setActiveTab] = useState<'students' | 'quotes'>('students');
+    const [students, setStudents] = useState<StudentSummary[]>([]);
+    const [quotes, setQuotes] = useState<QuoteItem[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Load Students
+    useEffect(() => {
+        if (!db || activeTab !== 'students') return;
+        setLoading(true);
         const q = collection(db, 'artifacts', appId, 'student_summaries');
-        // Simple listener for all summaries
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: StudentSummary[] = [];
             snapshot.forEach(doc => list.push(doc.data() as StudentSummary));
-            // Sort by last active descending
             list.sort((a, b) => (a.lastActive < b.lastActive ? 1 : -1));
             setStudents(list);
             setLoading(false);
         });
         return () => unsubscribe();
-    }, []);
+    }, [activeTab]);
+
+    // Load Quotes
+    useEffect(() => {
+        if (!db || activeTab !== 'quotes') return;
+        setLoading(true);
+        const unsub = onSnapshot(doc(db, 'artifacts', appId, 'global_settings', 'quotes'), (docSnap) => {
+            if (docSnap.exists()) {
+                setQuotes(docSnap.data().items || []);
+            } else {
+                setQuotes([]);
+            }
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [activeTab]);
+
+    const handleSaveQuotes = async () => {
+        if (!db) return;
+        try {
+            // Filter out empty quotes
+            const validQuotes = quotes.filter(q => q.text.trim().length > 0);
+            await setDoc(doc(db, 'artifacts', appId, 'global_settings', 'quotes'), {
+                items: validQuotes
+            });
+            alert("Quotes saved successfully!");
+        } catch (e) {
+            console.error("Error saving quotes", e);
+            alert("Error saving quotes.");
+        }
+    };
+
+    const addQuoteRow = () => {
+        setQuotes([...quotes, { text: '', author: '' }]);
+    };
+
+    const removeQuoteRow = (index: number) => {
+        const newQuotes = [...quotes];
+        newQuotes.splice(index, 1);
+        setQuotes(newQuotes);
+    };
+
+    const updateQuote = (index: number, field: 'text' | 'author', value: string) => {
+        const newQuotes = [...quotes];
+        newQuotes[index] = { ...newQuotes[index], [field]: value };
+        setQuotes(newQuotes);
+    };
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900">
-                        <Shield size={24} className="text-indigo-600" />
-                        Admin Dashboard
-                    </h2>
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900">
+                            <Shield size={24} className="text-indigo-600" />
+                            Admin Dashboard
+                        </h2>
+                        <div className="flex bg-gray-200 rounded-lg p-1">
+                            <button 
+                                onClick={() => setActiveTab('students')}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'students' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+                            >
+                                Student Progress
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('quotes')}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'quotes' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
+                            >
+                                Motivational Quotes
+                            </button>
+                        </div>
+                    </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
                         <X size={20} />
                     </button>
                 </div>
                 
-                <div className="flex-1 overflow-auto p-4">
-                    {loading ? (
-                        <div className="flex justify-center items-center h-full text-gray-400">Loading data...</div>
-                    ) : students.length === 0 ? (
-                        <div className="text-center text-gray-500 mt-10">No students found yet.</div>
-                    ) : (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                                <tr>
-                                    <th className="p-3">Student</th>
-                                    <th className="p-3">Current Month Score</th>
-                                    <th className="p-3">Total Study Time</th>
-                                    <th className="p-3 text-right">Last Active</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {students.map((s) => (
-                                    <tr key={s.uid} className="hover:bg-gray-50 transition">
-                                        <td className="p-3">
-                                            <div className="flex items-center gap-3">
-                                                {s.photoURL ? (
-                                                    <img src={s.photoURL} alt="" className="w-8 h-8 rounded-full bg-gray-200" />
-                                                ) : (
-                                                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
-                                                        {s.displayName?.[0] || 'U'}
+                <div className="flex-1 overflow-auto p-4 bg-gray-50/50">
+                    {activeTab === 'students' ? (
+                        // --- STUDENTS TAB ---
+                        loading ? (
+                            <div className="flex justify-center items-center h-full text-gray-400">Loading data...</div>
+                        ) : students.length === 0 ? (
+                            <div className="text-center text-gray-500 mt-10">No students found yet.</div>
+                        ) : (
+                            <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                                        <tr>
+                                            <th className="p-3">Student</th>
+                                            <th className="p-3">Current Month Score</th>
+                                            <th className="p-3">Total Study Time</th>
+                                            <th className="p-3 text-right">Last Active</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {students.map((s) => (
+                                            <tr key={s.uid} className="hover:bg-gray-50 transition">
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-3">
+                                                        {s.photoURL ? (
+                                                            <img src={s.photoURL} alt="" className="w-8 h-8 rounded-full bg-gray-200" />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                                                                {s.displayName?.[0] || 'U'}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <div className="font-medium text-gray-900">{s.displayName || 'Anonymous'}</div>
+                                                            <div className="text-xs text-gray-400">{s.email || 'No email'}</div>
+                                                        </div>
                                                     </div>
-                                                )}
-                                                <div>
-                                                    <div className="font-medium text-gray-900">{s.displayName || 'Anonymous'}</div>
-                                                    <div className="text-xs text-gray-400">{s.email || 'No email'}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-3">
-                                            <span className="font-bold text-green-600">{s.currentMonthScore || 0}k</span>
-                                        </td>
-                                        <td className="p-3 font-mono">
-                                            {formatDuration(s.totalStudyMinutes * 60 || 0)}
-                                        </td>
-                                        <td className="p-3 text-right text-gray-500 text-xs">
-                                            {new Date(s.lastActive).toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                                </td>
+                                                <td className="p-3">
+                                                    <span className="font-bold text-green-600">{s.currentMonthScore || 0}k</span>
+                                                </td>
+                                                <td className="p-3 font-mono">
+                                                    {formatDuration(s.totalStudyMinutes * 60 || 0)}
+                                                </td>
+                                                <td className="p-3 text-right text-gray-500 text-xs">
+                                                    {new Date(s.lastActive).toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                    ) : (
+                        // --- QUOTES TAB ---
+                        <div className="bg-white rounded-lg shadow border border-gray-100 p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-gray-700">Manage Daily Quotes</h3>
+                                <button 
+                                    onClick={handleSaveQuotes}
+                                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-sm transition"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+                            
+                            <div className="border rounded-lg overflow-hidden mb-4">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 text-gray-500 font-medium border-b">
+                                        <tr>
+                                            <th className="p-3 text-left w-2/3">Quote Text</th>
+                                            <th className="p-3 text-left w-1/4">Author</th>
+                                            <th className="p-3 w-10"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {quotes.map((quote, idx) => (
+                                            <tr key={idx} className="group hover:bg-gray-50">
+                                                <td className="p-2">
+                                                    <textarea 
+                                                        className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                                                        rows={2}
+                                                        value={quote.text}
+                                                        onChange={(e) => updateQuote(idx, 'text', e.target.value)}
+                                                        placeholder="Enter quote here..."
+                                                    />
+                                                </td>
+                                                <td className="p-2 align-top">
+                                                     <input 
+                                                        className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                        value={quote.author}
+                                                        onChange={(e) => updateQuote(idx, 'author', e.target.value)}
+                                                        placeholder="Author name"
+                                                    />
+                                                </td>
+                                                <td className="p-2 align-top text-center">
+                                                    <button 
+                                                        onClick={() => removeQuoteRow(idx)}
+                                                        className="p-2 text-gray-400 hover:text-red-500 transition"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <button 
+                                onClick={addQuoteRow}
+                                className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-4 py-2 rounded-lg transition"
+                            >
+                                <Plus size={18} /> Add New Quote
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>
@@ -508,7 +700,8 @@ export default function App() {
 
   const isListeningReady = useMemo(() => {
     const { listeningTopic, listeningLink, listeningVocab } = activeLog;
-    return listeningTopic?.trim() && listeningLink?.trim() && listeningVocab?.trim();
+    // Link is optional now
+    return listeningTopic?.trim() && listeningVocab?.trim();
   }, [activeLog]);
 
   const isWritingReady = useMemo(() => {
@@ -568,7 +761,7 @@ export default function App() {
         return;
     }
     if (field === 'listeningDone' && value === true && !isListeningReady) {
-        alert("Please enter the topic, paste the YouTube link, and the vocabulary learned.");
+        alert("Please enter the topic and the vocabulary learned.");
         return;
     }
     if (field === 'writingDone' && value === true && !isWritingReady) {
@@ -1347,7 +1540,7 @@ export default function App() {
                   <div className="relative flex gap-2">
                         <div className="relative flex-1">
                             <LinkIcon className="absolute left-3 top-3.5 text-gray-400" size={16} />
-                            <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Paste YouTube Link Here (Required)" value={activeLog.listeningLink} onChange={(e) => handleUpdateLog('listeningLink', e.target.value)} />
+                            <input disabled={isLocked} className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Paste YouTube Link Here (Optional)" value={activeLog.listeningLink} onChange={(e) => handleUpdateLog('listeningLink', e.target.value)} />
                         </div>
                         {activeLog.listeningLink && (
                             <button 
@@ -1597,6 +1790,9 @@ export default function App() {
                  ))}
              </div>
          </section>
+
+         {/* Daily Motivation Quote */}
+         <DailyQuote />
          
          {/* Footer Commitment */}
          <section className="bg-gray-800 text-gray-200 rounded-xl p-8 text-center space-y-6">
