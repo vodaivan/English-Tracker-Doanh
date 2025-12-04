@@ -61,9 +61,11 @@ export interface StudentSummary {
     lastActive: string;
     currentMonthScore: number;
     totalStudyMinutes: number;
+    prevMonthMoney?: number;
+    prevMonthCoins?: number;
 }
 
 export interface QuoteItem {
     text: string;
-    author: string;
+    meaning: string; // Vietnamese Meaning
 }

@@ -7,10 +7,10 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, 
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy, limit, getDoc } from 'firebase/firestore';
 import { 
   ChevronLeft, ChevronRight, CheckCircle, BookOpen, Mic, Headphones, PenTool, 
-  DollarSign, Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
+  Calendar as CalendarIcon, Info, ChevronDown, ChevronUp, Link as LinkIcon, Star,
   Clock, Play, Pause, RotateCcw, Gift, ExternalLink, Youtube,
   Bike, Car, TrainFront, Plane, Rocket, Gem, Footprints, Zap, Bus, LogIn, LogOut, User as UserIcon,
-  Timer, Square, RefreshCw, Shield, X, Plus, Trash2, Quote, Coins, Trophy, Archive, Medal, Ban
+  Timer, Square, RefreshCw, Shield, X, Plus, Trash2, Quote, Coins, Trophy, Archive, Medal, Ban, Banknote
 } from 'lucide-react';
 import { DailyLog, LogsMap, StudentSummary, QuoteItem } from './types';
 
@@ -222,9 +222,9 @@ const DailyQuote = () => {
     useEffect(() => {
         if (!db) {
             const fallbacks = [
-                { text: "The expert in anything was once a beginner.", author: "Helen Hayes" },
-                { text: "Consistency is what transforms average into excellence.", author: "Unknown" },
-                { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" }
+                { text: "The expert in anything was once a beginner.", meaning: "Chuyên gia trong bất cứ lĩnh vực nào cũng từng là người mới bắt đầu." },
+                { text: "Consistency is what transforms average into excellence.", meaning: "Sự kiên trì là thứ biến điều bình thường thành xuất sắc." },
+                { text: "Don't watch the clock; do what it does. Keep going.", meaning: "Đừng nhìn đồng hồ; hãy làm những gì nó làm. Tiếp tục đi." }
             ];
             const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
             setQuote(fallbacks[dayOfYear % fallbacks.length]);
@@ -240,7 +240,7 @@ const DailyQuote = () => {
                     setQuote(quotes[dayOfYear % quotes.length]);
                 }
             } else {
-                 setQuote({ text: "Every day is a new beginning.", author: "Unknown" });
+                 setQuote({ text: "Every day is a new beginning.", meaning: "Mỗi ngày là một khởi đầu mới." });
             }
         });
         return () => unsub();
@@ -253,13 +253,11 @@ const DailyQuote = () => {
             <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-fuchsia-500 opacity-90"></div>
             <div className="relative p-8 text-center text-white flex flex-col items-center">
                 <Quote size={32} className="mb-4 text-white/40" />
-                <p className="text-xl md:text-2xl font-serif italic font-medium leading-relaxed max-w-2xl">
+                <p className="text-xl md:text-2xl font-serif italic font-medium leading-relaxed max-w-2xl mb-2">
                     "{quote.text}"
                 </p>
-                <div className="mt-4 flex items-center gap-2 text-sm font-medium uppercase tracking-widest text-white/70">
-                    <div className="h-px w-8 bg-white/50"></div>
-                    {quote.author}
-                    <div className="h-px w-8 bg-white/50"></div>
+                <div className="flex items-center gap-2 text-sm font-medium text-white/90 bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-sm">
+                    {quote.meaning}
                 </div>
             </div>
         </section>
@@ -597,7 +595,7 @@ const PersonalArchiveModal = ({ logs, currentDate, onClose }: { logs: LogsMap, c
                              <div className="bg-white p-3 rounded-lg shadow-sm text-center">
                                  <div className="text-xs text-gray-500">Knowledge</div>
                                  <div className="text-2xl font-bold text-green-600 flex items-center justify-center gap-1">
-                                     {prevK} <DollarSign size={20} strokeWidth={3} />
+                                     {prevK} <Banknote size={20} strokeWidth={3} />
                                  </div>
                              </div>
                              <div className="bg-white p-3 rounded-lg shadow-sm text-center">
@@ -696,7 +694,7 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
     };
 
     const addQuoteRow = () => {
-        setQuotes([...quotes, { text: '', author: '' }]);
+        setQuotes([...quotes, { text: '', meaning: '' }]);
     };
 
     const removeQuoteRow = (index: number) => {
@@ -705,7 +703,7 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
         setQuotes(newQuotes);
     };
 
-    const updateQuote = (index: number, field: 'text' | 'author', value: string) => {
+    const updateQuote = (index: number, field: 'text' | 'meaning', value: string) => {
         const newQuotes = [...quotes];
         newQuotes[index] = { ...newQuotes[index], [field]: value };
         setQuotes(newQuotes);
@@ -713,14 +711,14 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden relative">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden relative">
+                <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full pr-10">
+                        <h2 className="text-xl font-bold flex items-center gap-2 text-indigo-900 shrink-0">
                             <Shield size={24} className="text-indigo-600" />
                             Admin Dashboard
                         </h2>
-                        <div className="flex bg-gray-200 rounded-lg p-1">
+                        <div className="flex bg-gray-200 rounded-lg p-1 shrink-0 self-start">
                             <button 
                                 onClick={() => setActiveTab('students')}
                                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'students' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
@@ -731,13 +729,14 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                                 onClick={() => setActiveTab('quotes')}
                                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'quotes' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-900'}`}
                             >
-                                Motivational Quotes
+                                Quotes
                             </button>
                         </div>
                     </div>
+                    {/* Close button absolutely positioned for mobile */}
                     <button 
                         onClick={onClose} 
-                        className="p-2 hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full transition z-10"
+                        className="absolute top-2 right-2 sm:static p-2 bg-white sm:bg-transparent shadow sm:shadow-none hover:bg-red-100 text-gray-500 hover:text-red-500 rounded-full transition z-10"
                         title="Close Dashboard"
                     >
                         <X size={24} strokeWidth={3} />
@@ -754,11 +753,13 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                         ) : (
                             <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden w-full">
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm min-w-[600px]">
+                                    <table className="w-full text-left text-sm min-w-[800px]">
                                         <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                                             <tr>
                                                 <th className="p-3">Student</th>
-                                                <th className="p-3">Current Month Score</th>
+                                                <th className="p-3">This Month Score</th>
+                                                <th className="p-3">Last Month (k)</th>
+                                                <th className="p-3">Last Month (c)</th>
                                                 <th className="p-3">Total Study Time</th>
                                                 <th className="p-3 text-right">Last Active</th>
                                             </tr>
@@ -783,7 +784,17 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                                                     </td>
                                                     <td className="p-3">
                                                         <span className="font-bold text-green-600 flex items-center gap-1">
-                                                            {s.currentMonthScore || 0} <DollarSign size={14} strokeWidth={3} />
+                                                            {s.currentMonthScore || 0} <Banknote size={14} strokeWidth={3} />
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className="font-medium text-gray-600">
+                                                            {s.prevMonthMoney || 0}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className="font-medium text-yellow-600">
+                                                            {s.prevMonthCoins || 0}
                                                         </span>
                                                     </td>
                                                     <td className="p-3 font-mono">
@@ -814,32 +825,33 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
                             
                             <div className="border rounded-lg overflow-hidden mb-4">
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-sm min-w-[500px]">
+                                    <table className="w-full text-sm min-w-[600px]">
                                         <thead className="bg-gray-50 text-gray-500 font-medium border-b">
                                             <tr>
-                                                <th className="p-3 text-left w-2/3">Quote Text</th>
-                                                <th className="p-3 text-left w-1/4">Author</th>
-                                                <th className="p-3 w-10"></th>
+                                                <th className="p-3 text-left w-[45%]">Quote (English)</th>
+                                                <th className="p-3 text-left w-[45%]">Meaning (Vietnamese)</th>
+                                                <th className="p-3 w-[10%]"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
                                             {quotes.map((quote, idx) => (
                                                 <tr key={idx} className="group hover:bg-gray-50">
-                                                    <td className="p-2">
+                                                    <td className="p-2 align-top">
                                                         <textarea 
                                                             className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
                                                             rows={2}
                                                             value={quote.text}
                                                             onChange={(e) => updateQuote(idx, 'text', e.target.value)}
-                                                            placeholder="Enter quote here..."
+                                                            placeholder="Enter quote in English..."
                                                         />
                                                     </td>
                                                     <td className="p-2 align-top">
-                                                         <input 
-                                                            className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                            value={quote.author}
-                                                            onChange={(e) => updateQuote(idx, 'author', e.target.value)}
-                                                            placeholder="Author name"
+                                                         <textarea 
+                                                            className="w-full p-2 border border-gray-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                                                            rows={2}
+                                                            value={quote.meaning}
+                                                            onChange={(e) => updateQuote(idx, 'meaning', e.target.value)}
+                                                            placeholder="Nhập nghĩa tiếng Việt..."
                                                         />
                                                     </td>
                                                     <td className="p-2 align-top text-center">
@@ -1161,10 +1173,21 @@ export default function App() {
             let monthScore = 0;
             let totalMins = 0;
             const currentMonthPrefix = todayStr.substring(0, 7); // "YYYY-MM"
+            
+            // Logic for Previous Month Calculation
+            const d = new Date(todayStr);
+            d.setMonth(d.getMonth() - 1);
+            const prevMonthPrefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            let prevMonthMoney = 0;
+            let prevMonthCoins = 0;
 
             Object.entries(newLogs).forEach(([date, log]) => {
                 if (date.startsWith(currentMonthPrefix)) {
                     monthScore += (log.totalMoney || 0);
+                }
+                if (date.startsWith(prevMonthPrefix)) {
+                    prevMonthMoney += (log.totalMoney || 0);
+                    prevMonthCoins += (log.dailyCoins || 0);
                 }
                 if (log.studyMinutes) totalMins += log.studyMinutes;
             });
@@ -1176,7 +1199,9 @@ export default function App() {
                 photoURL: user.photoURL || '',
                 lastActive: new Date().toISOString(),
                 currentMonthScore: monthScore,
-                totalStudyMinutes: totalMins
+                totalStudyMinutes: totalMins,
+                prevMonthMoney,
+                prevMonthCoins
             };
             
             await setDoc(doc(db, 'artifacts', appId, 'student_summaries', user.uid), summaryData);
@@ -1502,7 +1527,7 @@ export default function App() {
             <div className="flex flex-col items-end px-3 py-1 bg-green-50 rounded-lg border border-green-100 min-w-[100px]">
                 <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Month Total</span>
                 <span className="font-bold text-green-700 flex items-center gap-0.5">
-                    {totalEarned} <DollarSign size={12} strokeWidth={3} />
+                    {totalEarned} <Banknote size={12} strokeWidth={3} />
                 </span>
             </div>
             
@@ -1529,7 +1554,7 @@ export default function App() {
                  </div>
                  <div className="text-xl font-bold flex items-center gap-1">
                     <span className="text-teal-600 flex items-center">
-                        {currentScore} <DollarSign size={16} strokeWidth={3}/>
+                        {currentScore}
                     </span>
                     <span className="text-gray-400 text-sm">/{maxScore}</span>
                  </div>
@@ -1601,7 +1626,7 @@ export default function App() {
                                     <div className="self-end flex flex-col items-end gap-0.5">
                                         {studyMins > 0 && <span className="text-[10px] bg-white/50 px-1 rounded text-gray-600 font-medium">{studyMins}m</span>}
                                         {earned > 0 && <span className={`text-xs font-bold flex items-center ${earned === 40 ? 'text-green-700' : 'text-gray-600'}`}>
-                                            {earned} <DollarSign size={10} strokeWidth={3}/>
+                                            {earned} <Banknote size={10} strokeWidth={3}/>
                                         </span>}
                                         {earned === 40 && <CheckCircle className="w-3 h-3 text-green-600" />}
                                     </div>
@@ -1654,7 +1679,7 @@ export default function App() {
             </div>
             <div className="text-right bg-white/10 p-3 rounded-lg backdrop-blur-sm border border-white/10">
               <div className="text-3xl font-bold flex items-center gap-1 justify-end">
-                  {activeLog.totalMoney} <DollarSign size={24} strokeWidth={3} />
+                  {activeLog.totalMoney} <Banknote size={24} strokeWidth={3} />
               </div>
               <div className="text-[10px] text-blue-100 uppercase tracking-wider font-semibold">Earned Today</div>
             </div>
@@ -1668,7 +1693,7 @@ export default function App() {
                 <div className="p-2 bg-blue-100 rounded-lg text-blue-600"><BookOpen size={20} /></div>
                 <span>Task 1: Vocabulary</span>
                 <span className="ml-auto text-xs font-normal bg-blue-50 text-blue-600 px-2 py-1 rounded-full border border-blue-100 flex items-center gap-0.5">
-                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                    10 <Banknote size={12} strokeWidth={3} /> Reward
                 </span>
               </div>
               <div className="bg-blue-50/50 rounded-lg border border-blue-100 overflow-hidden">
@@ -1719,7 +1744,7 @@ export default function App() {
                 <div className="p-2 bg-purple-100 rounded-lg text-purple-600"><Mic size={20} /></div>
                 <span>Task 2: Speaking (2 mins)</span>
                 <span className="ml-auto text-xs font-normal bg-purple-50 text-purple-600 px-2 py-1 rounded-full border border-purple-100 flex items-center gap-0.5">
-                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                    10 <Banknote size={12} strokeWidth={3} /> Reward
                 </span>
               </div>
               <div className="bg-purple-50/50 rounded-lg border border-purple-100 overflow-hidden">
@@ -1760,7 +1785,7 @@ export default function App() {
                 <div className="p-2 bg-orange-100 rounded-lg text-orange-600"><Headphones size={20} /></div>
                 <span>Task 3: Listening (10 mins)</span>
                 <span className="ml-auto text-xs font-normal bg-orange-50 text-orange-600 px-2 py-1 rounded-full border border-orange-100 flex items-center gap-0.5">
-                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                    10 <Banknote size={12} strokeWidth={3} /> Reward
                 </span>
               </div>
               <div className="bg-orange-50/50 rounded-lg border border-orange-100 overflow-hidden">
@@ -1827,7 +1852,7 @@ export default function App() {
                 <div className="p-2 bg-pink-100 rounded-lg text-pink-600"><PenTool size={20} /></div>
                 <span>Task 4: Writing / Grammar</span>
                 <span className="ml-auto text-xs font-normal bg-pink-50 text-pink-600 px-2 py-1 rounded-full border border-pink-100 flex items-center gap-0.5">
-                    10 <DollarSign size={12} strokeWidth={3} /> Reward
+                    10 <Banknote size={12} strokeWidth={3} /> Reward
                 </span>
               </div>
                <div className="bg-pink-50/50 rounded-lg border border-pink-100 overflow-hidden">
@@ -1917,7 +1942,7 @@ export default function App() {
              </div>
              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 text-center">
                 <h4 className="text-yellow-800 font-bold mb-2 flex items-center justify-center gap-2">
-                    <DollarSign className="w-5 h-5" /> Bonus Rewards
+                    <Banknote className="w-5 h-5" /> Bonus Rewards
                 </h4>
                 <div className="text-sm text-yellow-700 flex flex-col gap-2 items-center">
                     <p>Complete all tasks (Mon-Sun) to earn <strong>+40k</strong>/week.</p>
