@@ -1,3 +1,4 @@
+
 export interface DailyLog {
   // Task 1: Vocab
   vocab1Meaning: string;
@@ -34,8 +35,11 @@ export interface DailyLog {
   totalMoney: number;
   studyMinutes: number;
 
-  // Gamification (Coins & Challenges)
+  // Gamification (Coins & Challenges & Gems)
   dailyCoins?: number;
+  dailyGems?: number; // Game Currency
+  game1Earnings?: number; // Cap at 20 per day
+  game3Earnings?: number; // Cap tracking if needed
   
   // Challenge 1: 5 words on paper (5c)
   challenge1Done?: boolean;
@@ -58,11 +62,19 @@ export interface StudentSummary {
     displayName: string;
     email: string;
     photoURL: string;
-    lastActive: string;
-    currentMonthScore: number;
-    totalStudyMinutes: number;
+    lastActive: string; // Used as "Last Exit" approximation
+    lastLogin?: string; // Session Start
+    
+    // Financials
+    currentMonthScore: number; // Money (K)
+    currentMonthCoins?: number;
+    currentMonthGems?: number;
+    
     prevMonthMoney?: number;
     prevMonthCoins?: number;
+    prevMonthGems?: number;
+    
+    totalStudyMinutes: number;
 }
 
 export interface QuoteItem {
