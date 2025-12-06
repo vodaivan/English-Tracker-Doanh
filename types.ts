@@ -35,16 +35,16 @@ export interface DailyLog {
   totalMoney: number;
   studyMinutes: number;
 
-  // Gamification (Coins & Challenges & Gems)
+  // Gamification (Coins & Gems)
   dailyCoins?: number;
-  dailyGems?: number; // Game Currency
-  game1Earnings?: number; // Cap at 20 per day
+  dailyGems?: number; // Unified Game Currency
+  game1Earnings?: number; // Cap tracking if needed
   game3Earnings?: number; // Cap tracking if needed
   
   // Challenge 1: 5 words on paper (5c)
   challenge1Done?: boolean;
 
-  // Challenge 2: 6 boxes streak (40c for 3 days)
+  // Challenge 2: 6 boxes streak (20c for 3 days)
   challenge2Done?: boolean;
   challenge2Streak?: number; // Current streak count (1, 2, or 3)
   challenge2Words?: string[]; // The 6 words
@@ -62,14 +62,17 @@ export interface StudentSummary {
     displayName: string;
     email: string;
     photoURL: string;
+    
+    // Timestamps
     lastActive: string; // Used as "Last Exit" approximation
     lastLogin?: string; // Session Start
     
-    // Financials
+    // Financials - Current Month
     currentMonthScore: number; // Money (K)
     currentMonthCoins?: number;
     currentMonthGems?: number;
     
+    // Financials - Previous Month
     prevMonthMoney?: number;
     prevMonthCoins?: number;
     prevMonthGems?: number;

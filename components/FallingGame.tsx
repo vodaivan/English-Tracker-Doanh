@@ -202,11 +202,12 @@ const FallingGame: React.FC<FallingGameProps> = ({ logs, dateStr, onEarnGems, on
                     <div className="flex flex-col items-center gap-6 w-full max-w-md animate-in fade-in zoom-in duration-300">
                         
                         {/* Word Block */}
-                        <div className="bg-slate-800 px-8 py-6 rounded-2xl border-2 border-slate-700 w-full text-center">
-                            <div className="text-5xl font-mono font-bold tracking-widest text-white drop-shadow-md mb-3">
+                        <div className="bg-slate-800 px-8 py-6 rounded-2xl border-2 border-slate-700 w-full text-center relative overflow-hidden">
+                            <div className="text-5xl font-mono font-bold tracking-widest text-white drop-shadow-md mb-4">
                                 {getRenderedWord()}
                             </div>
-                            <div className="text-xl text-cyan-200 font-medium border-t border-slate-600 pt-3">
+                            {/* Meaning Display below word */}
+                            <div className="text-xl text-cyan-300 font-medium border-t border-slate-600 pt-3">
                                 {currentWord.meaning}
                             </div>
                         </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Gamepad2, Trophy, BrainCircuit, Ban, Gem, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Trophy, BrainCircuit, Gem, RefreshCw } from 'lucide-react';
 import { LogsMap } from '../types';
 import { defaultLog, getAvailableVocabulary } from '../utils';
 
@@ -25,15 +25,14 @@ const MatchingGame = ({
 }) => {
     const [items, setItems] = useState<GameItem[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [timer, setTimer] = useState(90); // Increased time for 12 pairs
+    const [timer, setTimer] = useState(120); // Time for 12 pairs
     const [score, setScore] = useState(0);
     const [gameStatus, setGameStatus] = useState<'idle' | 'playing' | 'won' | 'lost'>('idle');
     const [shakeId, setShakeId] = useState<string | null>(null);
     
     // Earnings for today (check cap)
     const currentLog = logs[dateStr] || defaultLog;
-    const todayEarnings = currentLog.game1Earnings || 0;
-    const canEarn = todayEarnings < 20;
+    const todayEarnings = currentLog.dailyGems || 0; // Just show total
 
     useEffect(() => {
         let interval: number;
@@ -52,8 +51,8 @@ const MatchingGame = ({
     }, [gameStatus]);
 
     const startGame = () => {
-        // 1. Fetch Vocab (4 Weeks + Default)
-        const allVocab = getAvailableVocabulary(logs, dateStr, 20); // Get at least 20
+        // 1. Fetch Vocab (4 Weeks + Default) - Request 12 Pairs
+        const allVocab = getAvailableVocabulary(logs, dateStr, 24); 
 
         // 2. Select 12 Pairs
         const selectedPairs = allVocab.sort(() => 0.5 - Math.random()).slice(0, 12);
@@ -68,7 +67,7 @@ const MatchingGame = ({
 
         // 4. Shuffle Items
         setItems(gameItems.sort(() => 0.5 - Math.random()));
-        setTimer(90);
+        setTimer(120);
         setScore(0);
         setGameStatus('playing');
         setSelectedId(null);
@@ -123,16 +122,8 @@ const MatchingGame = ({
     };
 
     const handleWin = () => {
-        if (!canEarn) return;
-        
-        // Reward Logic: 5 Gems for win
-        const reward = 5;
-        const allowed = 20 - todayEarnings;
-        const actualReward = Math.min(reward, allowed);
-        
-        if (actualReward > 0) {
-            onEarnGems(actualReward);
-        }
+        // Reward Logic: 5 Gems per win
+        onEarnGems(5);
     };
 
     return (
@@ -151,7 +142,7 @@ const MatchingGame = ({
                      </div>
                      <div className="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-full border border-blue-900/50">
                         <Gem size={16} className="text-blue-400" />
-                        <span className="font-bold text-blue-400">{todayEarnings}/20</span>
+                        <span className="font-bold text-blue-400">+{score} pts</span>
                      </div>
                 </div>
             </div>
@@ -182,12 +173,12 @@ const MatchingGame = ({
                         ))}
                     </div>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4">
                         {gameStatus === 'idle' && (
                              <>
                                 <Gamepad2 size={64} className="text-cyan-500 mb-6 animate-pulse" />
                                 <h2 className="text-3xl font-bold mb-2">Vocab Match</h2>
-                                <p className="text-slate-400 mb-8 max-w-sm">Match 12 pairs of words and meanings. Earn Gems daily!</p>
+                                <p className="text-slate-400 mb-8 max-w-sm">Match 12 pairs of words and meanings. Earn Gems!</p>
                                 <button onClick={startGame} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-full font-bold text-lg flex items-center gap-2 transition shadow-lg shadow-cyan-900/20 active:scale-95">
                                     <Gamepad2 fill="currentColor" /> Start Game
                                 </button>
@@ -198,6 +189,9 @@ const MatchingGame = ({
                                 <Trophy size={48} className="mx-auto text-yellow-400 mb-4 animate-bounce" />
                                 <h3 className="text-2xl font-bold text-green-400 mb-2">You Won!</h3>
                                 <p className="text-slate-400 mb-6">Score: {score}</p>
+                                <div className="text-xl font-bold text-blue-400 mb-6 flex items-center justify-center gap-2">
+                                    +5 <Gem size={20} fill="currentColor"/>
+                                </div>
                                 <div className="flex gap-4 justify-center">
                                     <button onClick={onBack} className="px-6 py-2 rounded-full border border-slate-600 text-slate-300 hover:bg-slate-800 transition">Exit</button>
                                     <button onClick={startGame} className="px-6 py-2 rounded-full bg-cyan-600 text-white font-bold hover:bg-cyan-500 transition flex items-center gap-2"><RefreshCw size={18}/> Play Again</button>

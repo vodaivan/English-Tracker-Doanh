@@ -185,7 +185,7 @@ const BuilderGame: React.FC<BuilderGameProps> = ({ logs, dateStr, onEarnGems, on
             </div>
 
             {/* Game Area */}
-            <div className="flex-1 flex flex-col items-center justify-start p-6 overflow-y-auto">
+            <div className="flex-1 flex flex-col items-center justify-start p-6 overflow-y-auto pb-24">
                 {status === 'playing' && round && (
                     <div className="w-full max-w-lg space-y-8 mt-4 animate-in fade-in slide-in-from-bottom-4">
                         
@@ -250,7 +250,7 @@ const BuilderGame: React.FC<BuilderGameProps> = ({ logs, dateStr, onEarnGems, on
 
             {/* Controls & Letters */}
             {status === 'playing' && round && (
-                <div className="bg-slate-800 border-t border-slate-700 p-4 z-20 pb-8 sm:pb-4">
+                <div className="bg-slate-800 border-t border-slate-700 p-4 z-20 pb-8 sm:pb-4 fixed bottom-0 left-0 right-0 max-w-4xl mx-auto rounded-t-xl">
                     <div className="max-w-2xl mx-auto space-y-4">
                         {/* Letter Tiles */}
                         <div className="flex flex-wrap justify-center gap-2">
@@ -259,7 +259,7 @@ const BuilderGame: React.FC<BuilderGameProps> = ({ logs, dateStr, onEarnGems, on
                                     key={tile.id}
                                     onClick={() => handleLetterClick(tile.id, tile.char)}
                                     disabled={tile.status === 'used'}
-                                    className={`w-10 h-12 sm:w-12 sm:h-14 rounded-lg font-bold text-xl shadow-sm border-b-4 transition-all
+                                    className={`w-9 h-11 sm:w-12 sm:h-14 rounded-lg font-bold text-xl shadow-sm border-b-4 transition-all
                                         ${tile.status === 'used' 
                                             ? 'bg-slate-700 border-slate-800 text-slate-600 opacity-50 scale-95' 
                                             : 'bg-slate-200 text-slate-900 border-slate-400 hover:bg-white active:scale-95 active:border-b-0 active:translate-y-1'

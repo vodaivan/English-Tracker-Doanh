@@ -64,6 +64,7 @@ export const defaultLog: DailyLog = {
   dailyCoins: 0,
   dailyGems: 0,
   game1Earnings: 0,
+  game3Earnings: 0,
   challenge1Done: false,
   challenge2Done: false,
   challenge2Streak: 0,
@@ -103,17 +104,22 @@ export const DEFAULT_VOCAB_LIST = [
     { word: "NATURE", meaning: "Thiên nhiên" },
     { word: "ANIMAL", meaning: "Động vật" },
     { word: "SUCCESS", meaning: "Thành công" },
-    { word: "EFFORT", meaning: "Nỗ lực" }
+    { word: "EFFORT", meaning: "Nỗ lực" },
+    { word: "CHALLENGE", meaning: "Thử thách" },
+    { word: "GOAL", meaning: "Mục tiêu" },
+    { word: "HABIT", meaning: "Thói quen" },
+    { word: "HEALTH", meaning: "Sức khỏe" },
+    { word: "EXERCISE", meaning: "Thể dục" }
 ];
 
 export const getAvailableVocabulary = (logs: LogsMap, dateStr: string, minWords: number = 30) => {
     const userWords: { word: string, meaning: string }[] = [];
     const today = new Date(dateStr);
     const cutoffDate = new Date(today);
-    cutoffDate.setDate(today.getDate() - 28); // 4 Weeks
+    cutoffDate.setDate(today.getDate() - 28); // 4 Weeks Window
     const cutoffStr = formatDate(cutoffDate);
 
-    // 1. Collect User Words
+    // 1. Collect User Words from Logs
     Object.entries(logs).forEach(([dateKey, log]) => {
         if (dateKey >= cutoffStr && log.vocabDone) {
             if (log.vocab1Word && log.vocab1Word.length >= 3) {
@@ -130,7 +136,6 @@ export const getAvailableVocabulary = (logs: LogsMap, dateStr: string, minWords:
 
     // 3. Fill with Default if needed
     if (uniqueUserWords.length < minWords) {
-        const needed = minWords - uniqueUserWords.length;
         // Shuffle default list
         const shuffledDefaults = [...DEFAULT_VOCAB_LIST].sort(() => 0.5 - Math.random());
         // Add only ones not already in user list
