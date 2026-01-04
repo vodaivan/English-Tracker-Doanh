@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
 // @ts-ignore
@@ -1026,6 +1027,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800 pb-10 flex flex-col">
+      <SpeedInsights />
       <style>{`
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%; background: ${sliderColor}; cursor: pointer; margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.2); border: 3px solid white; transition: background 0.2s; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 10px; cursor: pointer; background: #e5e7eb; border-radius: 9999px; background-image: linear-gradient(to right, #facc15 0%, #22c55e 33%, #3b82f6 66%, #9333ea 100%); background-size: ${sliderPercentage}% 100%; background-repeat: no-repeat; }
