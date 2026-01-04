@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 // @ts-ignore
 import { initializeApp } from 'firebase/app';
@@ -323,7 +322,11 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
         const q = collection(db, 'artifacts', appId, 'student_summaries');
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: StudentSummary[] = [];
-            snapshot.forEach(doc => list.push(doc.data() as StudentSummary));
+            snapshot.forEach(doc => {
+                const data = doc.data() as StudentSummary;
+                // Ensure UID is present if it wasn't saved in the fields
+                list.push({ ...data, uid: data.uid || doc.id });
+            });
             list.sort((a, b) => (a.lastActive < b.lastActive ? 1 : -1));
             setStudents(list);
             setLoading(false);
@@ -733,11 +736,10 @@ export default function App() {
   }
 
   const handleEarnGems = (amount: number, targetDate?: string) => {
-      // Use the selected date if provided, otherwise fall back to today
       const baseDateStr = targetDate || formatDate(getLogicalDate());
       
       setLogs(prevLogs => {
-          const currentLog = prevLogs[baseDateStr] || defaultLog;
+          const currentLog = prevLogs[baseDateStr] || { ...defaultLog };
           const newGems = Number(currentLog.dailyGems || 0) + Number(amount);
           const updatedLog = { ...currentLog, dailyGems: newGems };
           const newLogs: LogsMap = { ...prevLogs, [baseDateStr]: updatedLog };
@@ -746,19 +748,18 @@ export default function App() {
           try { localStorage.setItem('daily_logs', JSON.stringify(newLogs)); } catch (e) {}
           
           if (user && db) {
-              // write daily log using the correct date
+              // write daily log to cloud
               setDoc(
                 doc(db, 'artifacts', appId, 'users', user.uid, 'daily_logs', baseDateStr),
                 updatedLog,
                 { merge: true }
               );
               
+              // Calculate summary data for Admin Dashboard
               let monthScore = 0;
               let currentCoins = 0;
               let currentGems = 0;
               let totalMins = 0;
-
-              // compute current/previous month based on baseDateStr, not todayStr
               const currentMonthPrefix = baseDateStr.substring(0, 7);
               const d = new Date(baseDateStr);
               d.setMonth(d.getMonth() - 1);
@@ -783,6 +784,10 @@ export default function App() {
               });
 
               const summaryData: Partial<StudentSummary> = {
+                  uid: user.uid,
+                  displayName: user.displayName || 'Anonymous',
+                  photoURL: user.photoURL || '',
+                  email: user.email || '',
                   currentMonthScore: monthScore,
                   currentMonthCoins: currentCoins,
                   currentMonthGems: currentGems,
@@ -793,8 +798,9 @@ export default function App() {
                   lastActive: new Date().toISOString()
               };
 
+              // CORRECT PATH: Fixed to artifacts/${appId}/student_summaries/${uid}
               setDoc(
-                  doc(db, 'artifacts', appId, 'users', user.uid, 'student_summaries'),
+                  doc(db, 'artifacts', appId, 'student_summaries', user.uid),
                   summaryData,
                   { merge: true }
               );
@@ -959,13 +965,12 @@ export default function App() {
     let totalMoneyMonth = 0;
     let scoreMonth = 0;
     
-    // Monthly Money/Score (Depend on selected month)
-    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-    days.forEach(day => {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const log = logs[dateStr];
-        if (log) {
-             if (log.totalMoney) { totalMoneyMonth += Number(log.totalMoney); scoreMonth += (Number(log.totalMoney) / 10); }
+    // Monthly stats
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+    Object.entries(logs).forEach(([date, log]) => {
+        if (date.startsWith(monthPrefix)) {
+            totalMoneyMonth += Number(log.totalMoney || 0);
+            scoreMonth += (Number(log.totalMoney || 0) / 10);
         }
     });
 
@@ -974,8 +979,8 @@ export default function App() {
     let allGems = 0;
     Object.values(logs).forEach(log => {
         const val = log as DailyLog;
-        if (val.dailyCoins) allCoins += Number(val.dailyCoins || 0);
-        allGems += Number(val.dailyGems || 0); // Always sum dailyGems if present, treating undefined as 0
+        allCoins += Number(val.dailyCoins || 0);
+        allGems += Number(val.dailyGems || 0);
     });
 
     return { 
